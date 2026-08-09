@@ -25,15 +25,44 @@ nothing, `pkill -x qs` and relaunch `qs -d` before believing the change is wrong
 | `custom/controlcenter` | Control Center | `quickshell/ControlCenterApp` |
 | `clock` | notification centre — clock, calendar, notification list | `quickshell/NotificationCenterApp` |
 | `custom/appmenu` | app launcher, centre of the bar | ML4W's |
+| `hyprland/workspaces` | grouped taskbar — window icons per workspace | Waybar built-in + `taskbar-window-click.sh` |
 
 Backends in `waybar/scripts/`: `claude-usage.py`, `network-details.py`, `system-stats.py`,
-`easyeffects-status.py`, `brightness.py`.
+`easyeffects-status.py`, `brightness.py`, `weather.py`, `taskbar-window-click.sh`.
 
 IPC targets: `qs ipc show`. The ones this repo owns are `audio`, `bluetooth`, `network`,
 `claude-usage`, `control-center`, `notifications`, `notification-state`.
 
 ## Live gotchas
 
+- **A commented-out module line needs a LEADING comma.** `"clock"` is the last entry in
+  `modules-right` and carries no trailing comma, so uncommenting a `//"mpris",` under it
+  produced `"clock" "mpris"` — Waybar then refuses to start with
+  `Error parsing JSON: Missing ',' or ']' in array declaration` and the bar simply never
+  appears. The dormant entries are therefore written `//,"mpris"`. A trailing comma before
+  the closing `]` *is* tolerated, so leading commas are safe in any combination.
+- **`workspace-taskbar` needs `{windows}` in the workspace `format`.** Undocumented in the
+  man page; it is the flag the source tests. Without it the module loads and styles
+  correctly and no window icon is ever added — it reads as a CSS bug and is not.
+  Workspace *labels* are also unclickable by design here; see
+  `waybar/modules/workspace-taskbar.json` for why, and why `ext/workspaces` stays on the left.
+- **Both workspace modules render as `#workspaces`.** `ext/workspaces` (left) and
+  `hyprland/workspaces` (centre) share the id, so the left module's pill styling lands on
+  every window icon in the centre. All of `waybar/style/workspace-taskbar.css` is scoped to
+  `.modules-center` for that reason.
+- **This Waybar build has no `cava`.** It logs `Unknown module` and leaves a gap. Needs a
+  rebuild with `-Dcava=enabled`.
+- **Hyprland 0.56 parses dispatch payloads as Lua.** `dispatch focuswindow address:0x…`
+  errors; the working forms are `hl.dsp.focus({ window = "address:0x…" })` and
+  `hl.dsp.window.close({ window = "address:0x…" })`. Note `focuswindow` and `killactive`
+  do not exist as Lua fields at all — `hl.dsp.window` is a *table*, not a function.
+  Enumerate with `hyprctl eval` writing to a file; `hyprctl dispatch` wraps its argument in
+  `return hl.dispatch(...)` and cannot introspect.
+- **Weather glyphs must be Material Icons *Round*, not Material Symbols.** `rainy`,
+  `clear_day`, `foggy` and friends are Symbols names, that font is not installed, and a
+  missing ligature renders as *nothing* — the chip loses its icon while the temperature
+  still shows, so it looks like a layout bug. `weather.py`'s `ICONS` map carries a
+  one-liner for verifying a name against the installed font before adding it.
 - **`~/.config/waybar/config` does not exist.** The live pair comes from
   `~/.config/ml4w/settings/waybar-theme.sh` → `~/.config/waybar/themes/ml4w-modern/`.
   Confirm with `ps aux | grep '[w]aybar -c'`.

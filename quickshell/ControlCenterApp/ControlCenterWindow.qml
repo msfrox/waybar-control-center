@@ -68,6 +68,7 @@ PanelWindow {
             showWindow = true
             refresh()
             reloadBrightness()
+            reloadWeather()
         }
     }
 
@@ -129,7 +130,10 @@ PanelWindow {
         repeat: true
         triggeredOnStart: true
         running: root.isOpen
-        onTriggered: root.refresh()
+        onTriggered: {
+            root.refresh()
+            root.pollBrightness()
+        }
     }
 
     // --- BRIGHTNESS ---
@@ -150,6 +154,70 @@ PanelWindow {
 
     function reloadBrightness() {
         if (!brightnessProc.running) brightnessProc.running = true
+    }
+
+    // The panel used to read brightness only in onIsOpenChanged, so pressing the
+    // laptop's brightness keys while it was open left both sliders showing whatever
+    // was true when it opened - you had to close and reopen to see the real value.
+    // The internal panel is a plain sysfs read, so it can ride the 2-second tick;
+    // "get-internal" exists precisely so this poll does not drag the slow DDC read
+    // along with it. The external monitor stays on open + after a drag settles.
+    Process {
+        id: brightnessInternalProc
+        command: [Quickshell.env("HOME") + "/.config/waybar/scripts/brightness.py",
+                  "get-internal"]
+        stdout: StdioCollector {
+            onStreamFinished: {
+                try {
+                    const payload = JSON.parse(this.text)
+                    if (!payload.internal) return
+                    // Merged, not assigned: the reply has no "external" key and a
+                    // straight assignment would drop the monitor's slider.
+                    root.brightness = Object.assign({}, root.brightness,
+                                                    { internal: payload.internal })
+                } catch (e) {}
+            }
+        }
+    }
+
+    function pollBrightness() {
+        if (!brightnessInternalProc.running) brightnessInternalProc.running = true
+    }
+
+    // --- WEATHER ---
+    // Read on open only. weather.py caches to disk for 30 minutes and serves the
+    // cached copy without touching the network, so opening the panel repeatedly
+    // costs a file read; putting this on the stats tick would gain nothing and
+    // would eventually earn a 503 from wttr.in.
+    property var weather: ({})
+
+    Process {
+        id: weatherProc
+        command: [Quickshell.env("HOME") + "/.config/waybar/scripts/weather.py"]
+        stdout: StdioCollector {
+            onStreamFinished: {
+                try { root.weather = JSON.parse(this.text) } catch (e) {}
+            }
+        }
+    }
+
+    Process {
+        id: weatherRefreshProc
+        command: [Quickshell.env("HOME") + "/.config/waybar/scripts/weather.py",
+                  "--refresh"]
+        stdout: StdioCollector {
+            onStreamFinished: {
+                try { root.weather = JSON.parse(this.text) } catch (e) {}
+            }
+        }
+    }
+
+    function reloadWeather() {
+        if (!weatherProc.running) weatherProc.running = true
+    }
+
+    function refreshWeather() {
+        if (!weatherRefreshProc.running) weatherRefreshProc.running = true
     }
 
     Process { id: brightnessSet }
@@ -596,10 +664,21 @@ PanelWindow {
             Layout.fillWidth: true
             from: 1
             to: 100
-            // Taken on change rather than bound, so a live reading arriving
-            // mid-drag does not fight the handle.
             value: brow.percent
             onMoved: brow.moved(Math.round(value))
+
+            // Dragging a Slider assigns `value` imperatively, and that destroys the
+            // `value: brow.percent` binding above for good. So even once a live
+            // reading was polled in, the handle stayed where the user last left it -
+            // the binding it was relying on no longer existed. Re-assert it on each
+            // new reading, but never while the handle is held, or the poll would
+            // yank the slider out from under the drag.
+            Connections {
+                target: brow
+                function onPercentChanged() {
+                    if (!brightSlider.pressed) brightSlider.value = brow.percent
+                }
+            }
 
             background: Rectangle {
                 x: brightSlider.leftPadding
@@ -765,7 +844,6 @@ PanelWindow {
                 spacing: 10
 
                 ColumnLayout {
-                    Layout.fillWidth: true
                     spacing: 0
 
                     Text {
@@ -781,6 +859,86 @@ PanelWindow {
                         font.family: Theme.fontFamily
                         font.pixelSize: 11
                         color: Theme.outline
+                    }
+                }
+
+                // An explicit spacer rather than fillWidth on the date column. The
+                // date column had it, but a ColumnLayout whose children are plain
+                // Text still reports a small implicit width, and the power button
+                // ended up parked next to the date in the middle of the header
+                // instead of in the corner. A zero-size filler is unambiguous.
+                Item { Layout.fillWidth: true }
+
+                // --- WEATHER ---
+                // Header-sized on purpose: condition glyph and temperature only, with
+                // everything else - feels-like, humidity, wind, UV and the three-day
+                // outlook - in the tooltip. This sits between the date and the power
+                // button, so it has to stay narrow enough not to push power off the
+                // corner on a long location name.
+                Rectangle {
+                    id: weatherChip
+                    visible: !!root.weather.temp
+                    implicitWidth: weatherRow.implicitWidth + 16
+                    implicitHeight: 30
+                    radius: 6
+                    color: weatherMouse.containsMouse
+                           ? Qt.rgba(Theme.primary.r, Theme.primary.g, Theme.primary.b, 0.14)
+                           : "transparent"
+
+                    ToolTip.visible: weatherMouse.containsMouse
+                    ToolTip.delay: 300
+                    ToolTip.text: {
+                        const w = root.weather
+                        if (!w.temp) return ""
+                        let lines = []
+                        if (w.location) lines.push(w.location)
+                        lines.push(w.desc + " · feels like " + w.feels + "°C")
+                        lines.push("Humidity " + w.humidity + "%  ·  Wind "
+                                   + w.wind + " km/h " + w.wind_dir
+                                   + "  ·  UV " + w.uv)
+                        if (w.days && w.days.length) {
+                            lines.push("")
+                            for (let i = 0; i < w.days.length; i++) {
+                                const d = w.days[i]
+                                const when = i === 0 ? "Today"
+                                           : Qt.formatDate(new Date(d.date), "ddd")
+                                lines.push(when + "   " + d.min + "–" + d.max
+                                           + "°C   " + d.desc)
+                            }
+                        }
+                        // Shown greyed with the reason attached rather than blanked:
+                        // a stale reading still beats an empty header.
+                        if (w.error) lines.push("\nStale — " + w.error)
+                        lines.push("\nClick to refresh")
+                        return lines.join("\n")
+                    }
+
+                    RowLayout {
+                        id: weatherRow
+                        anchors.centerIn: parent
+                        spacing: 5
+
+                        Glyph {
+                            text: root.weather.icon ? root.weather.icon : "cloud"
+                            font.pixelSize: 17
+                            color: root.weather.error ? Theme.outline : Theme.primary
+                        }
+
+                        Text {
+                            text: root.weather.temp ? root.weather.temp + "°" : ""
+                            font.family: Theme.fontFamily
+                            font.pixelSize: 13
+                            font.bold: true
+                            color: root.weather.error ? Theme.outline : Theme.on_surface
+                        }
+                    }
+
+                    MouseArea {
+                        id: weatherMouse
+                        anchors.fill: parent
+                        hoverEnabled: true
+                        cursorShape: Qt.PointingHandCursor
+                        onClicked: root.refreshWeather()
                     }
                 }
 

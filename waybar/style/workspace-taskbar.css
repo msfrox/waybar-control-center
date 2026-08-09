@@ -1,0 +1,79 @@
+/* -----------------------------------------------------
+ * Workspace taskbar (hyprland/workspaces in modules-center)
+ *
+ * Append to the active theme's style.css, AFTER the existing "Workspaces" block.
+ *
+ * Both ext/workspaces (left) and hyprland/workspaces (centre) render with the id
+ * #workspaces, so the left module's pill styling -- 2px primary border, 8px radius,
+ * opaque background -- lands on every window icon in the centre unless it is scoped
+ * back off. Everything here is therefore anchored to .modules-center.
+ * ----------------------------------------------------- */
+
+/* The workspace button is now a container for window icons, not a pill. Strip the
+   chrome it inherits and let it be a grouping label instead. */
+.modules-center #workspaces button {
+    border: none;
+    background: transparent;
+    background-color: transparent;
+    border-radius: 8px;
+    padding: 0px 6px;
+    margin: 3px 2px;
+    color: @on_surface;
+    min-width: 0;
+}
+
+/* A faint plate behind the group is what actually communicates "these windows are on
+   this workspace" -- the gap between groups alone is too weak to read at a glance. */
+.modules-center #workspaces button:not(.empty) {
+    background: alpha(@on_surface, 0.06);
+}
+
+/* The focused workspace's group, tinted rather than filled: the window icons inside
+   have to stay legible, which a solid @primary fill does not allow. */
+.modules-center #workspaces button.active {
+    background: alpha(@primary, 0.20);
+    border: none;
+    border-radius: 8px;
+    min-width: 0;
+    color: @on_surface;
+}
+
+/* Hovering the group must not look like hovering a window -- keep it subtle, since
+   the workspace label itself is not clickable (see the note in modules.json). */
+.modules-center #workspaces button:hover {
+    background: alpha(@on_surface, 0.12);
+    border: none;
+    border-radius: 8px;
+    box-shadow: none;
+}
+
+/* The workspace name, sitting to the left of that workspace's icons.
+   Class is "workspace-label" -- confirmed against the binary, not guessed. */
+.modules-center #workspaces .workspace-label {
+    color: alpha(@on_surface, 0.55);
+    font-size: 11px;
+    font-weight: bold;
+    margin-right: 4px;
+}
+
+/* Individual window buttons inside a group. */
+.modules-center #workspaces .taskbar-window {
+    border-radius: 6px;
+    padding: 0px 3px;
+    margin: 0px 1px;
+    background: transparent;
+    border: none;
+}
+
+.modules-center #workspaces .taskbar-window:hover {
+    background: alpha(@on_surface, 0.18);
+    box-shadow: none;
+}
+
+/* Requires "update-active-window": true in the module config. An underline is used
+   rather than a fill so it does not compete with the active-workspace tint above. */
+.modules-center #workspaces .taskbar-window.active {
+    background: alpha(@primary, 0.30);
+    border-bottom: 2px solid @primary;
+    border-radius: 6px 6px 0px 0px;
+}

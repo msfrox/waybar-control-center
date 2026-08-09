@@ -137,6 +137,15 @@ def external_set(percent):
 if __name__ == "__main__":
     action = sys.argv[1] if len(sys.argv) > 1 else "get"
 
+    # Internal panel only, for the Control Center's live poll. This is one sysfs read
+    # via `brightnessctl -m` and costs nothing, so it can run on the 2-second stats
+    # tick; a full `get` cannot, because it also does a DDC/CI round-trip over I2C.
+    # Deliberately omits the "external" key rather than sending null for it, so the
+    # caller can merge this into what it already has without erasing the monitor.
+    if action == "get-internal":
+        print(json.dumps({"internal": internal_get()}))
+        raise SystemExit(0)
+
     if action == "set" and len(sys.argv) >= 4:
         target, value = sys.argv[2], int(float(sys.argv[3]))
         if target == "internal":
