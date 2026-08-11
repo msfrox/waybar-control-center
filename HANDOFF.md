@@ -1,8 +1,19 @@
 # Handoff
 
-**State: phases 0–8 shipped and running live on RUBY2.** Repo:
+**State: phases 0–8 shipped; phase 10 (the Quickshell bar) is at step 1 of 7.** Repo:
 `msfrox/waybar-control-center` (public). Everything is symlinked into `~/.config` by
 `install.sh`, so editing the repo edits the live desktop.
+
+**Phase 10 replaces Waybar with `quickshell/BarApp/`** — our own bar, not ML4W's
+`StatusbarApp`. See PLAN.md for the reasoning and the step list. Right now **both bars
+run at once**: `BarApp` is anchored to the *top* (`position: "top"` in `bar.json`) and
+Waybar still owns the bottom, so the two can be screenshot side by side and compared.
+`hyprctl monitors -j` shows `reserved: [0, 52, 0, 52]` while that is true.
+
+Step 1 is done: the frame (`Variants` over screens, exclusion zone, three module groups),
+`BarButton`, the app-menu / Control Center / ML4W-logo buttons, and the clock. They are
+pixel-close to their Waybar originals. Step 2 is the workspaces, clock, battery and the
+volume / Bluetooth / network indicators.
 
 ## Resume
 
@@ -32,6 +43,31 @@ Backends in `waybar/scripts/`: `claude-usage.py`, `network-details.py`, `system-
 
 IPC targets: `qs ipc show`. The ones this repo owns are `audio`, `bluetooth`, `network`,
 `claude-usage`, `control-center`, `notifications`, `notification-state`.
+
+## Porting a Waybar module to `BarApp` — read this first
+
+Four traps, all found in step 1, all of which look like QML bugs and are not.
+
+- **The `colored` variant remaps four colour names before importing the shared sheet**
+  (`themes/ml4w-modern/colored/style.css:5-8`): `on_surface`→`on_secondary`,
+  `background`→`secondary`, `border_color`→`secondary`, `icon_color`→`on_secondary`.
+  So `#clock { background: @background; color: @on_surface }` is really a **light** pill
+  with **dark** text. Copy the CSS names across literally and you get the inverse of what
+  is on screen. Resolve through that table first, then map to `Theme.*`.
+- **A module's "icon" is not always text.** `custom/ml4w-welcome`'s `format` is a single
+  space; the logo arrives as a CSS `background-image`. Porting the format across as a
+  glyph gives a button that is invisible but still clickable. Check the CSS for a
+  `background-image` before assuming the format string is the whole module.
+- **Bare modules hover by recolouring to `@primary`, not by showing a plate**, and they
+  carry `text-shadow: 0 1px 3px rgba(0,0,0,0.85)` so a light glyph survives a bright
+  wallpaper through the translucent bar. Pills are the ones that change fill.
+- **Never put `anchors` on an item inside a `RowLayout`.** Qt warns *"Detected anchors on
+  an item that is managed by a layout"* and then sizes it arbitrarily. `BarButton` uses
+  `Layout.alignment: Qt.AlignVCenter`.
+
+Waybar's `config` sets `spacing: 0` and expresses every gap as a per-module CSS margin,
+so `BarButton.rightMargin` is the only place a gap belongs. Bare modules are
+`padding: 0px`; `hpadding` defaults to 0 for that reason.
 
 ## Live gotchas
 
@@ -127,7 +163,8 @@ IPC targets: `qs ipc show`. The ones this repo owns are `audio`, `bluetooth`, `n
 |---|---|
 | `~/.config/waybar-control-center/claude-usage.json` | usage dial display options |
 | `~/.config/waybar-control-center/notifications.json` | DND flag |
-| `~/.config/waybar-control-center/control-center.json` | per-section collapse state |
+| `~/.config/waybar-control-center/control-center.json` | per-section collapse state, weather location |
+| `~/.config/waybar-control-center/bar.json` | bar enabled / position / height (phase 10) |
 | `~/.cache/waybar-control-center/notification-history.json` | notification history across restarts (capped at 50) |
 
 These are what the settings app edits. Each panel already watches its own file through a
@@ -168,11 +205,29 @@ version looked correct and silently parsed nothing (real comments in it contain 
 
 ## Next
 
-**Not the settings app** — it moved to hyprsys phase 3, along with its two unfinished
-items — all now done. See PLAN.md, "The settings app, moved out".
+**Phase 10 step 2 — the built-in replacements.** In `BarApp`: `ext/workspaces` (left),
+battery off `Quickshell.Services.UPower`, and the volume / Bluetooth / network indicator
+labels, whose panels already exist and only need a bar-side label plus the same click
+target. Waybar's exact format strings and `format-icons` arrays are the spec; read them
+out of `~/.config/waybar/modules.json` and resolve colours through the remap table above.
 
-Nothing is blocking hyprsys any more. `settings/` here still works and is still installed;
-deleting it and repointing the Control Center's Settings tile at `hyprsys` is a deliberate
-later step.
+Then step 3 (the taskbar, off `Quickshell.Wayland` toplevels +
+`DesktopEntries.heuristicLookup()`), 4 (window title, Mpris nowplaying, quicklinks),
+5 (the Claude dial as a `Canvas`), 6 (cutover), 7 (the Waybar-blocked wins).
+
+Two things not to lose:
+
+- **`qs ipc call` per click is a placeholder.** `BarApp.panel()` spawns a process to talk
+  to a window in its own process. Replacing it with an in-process signal bus is worth
+  doing when the panels are being edited anyway — deliberately not done in step 1 so that
+  every trigger still behaves identically to the Waybar one it replaces.
+- **hyprsys's generated Waybar page dies with Waybar.** It is driven off `modules.json`;
+  once the bar is `BarApp`, `bar.json` is what there is to configure. Worth settling
+  before hyprsys phase 3, not after.
+
+**Not the settings app** — it moved to hyprsys phase 3, along with its two unfinished
+items — all now done. See PLAN.md, "The settings app, moved out". `settings/` here still
+works and is still installed; deleting it and repointing the Control Center's Settings
+tile at `hyprsys` is a deliberate later step.
 
 Everything else is in `BACKLOG.md`.

@@ -73,6 +73,8 @@ Shared conventions for every panel added here, taken from the existing ML4W wind
       [hyprsys](https://github.com/msfrox/hyprsys) phase 3 together with the app itself**.
       See [the settings section below](#the-settings-app-moved-out) before doing any
       further settings work in this repo.
+- [ ] **Phase 10 — Quickshell becomes the bar.** Replace Waybar with `quickshell/BarApp/`,
+      this repo's own bar, and take the things Waybar structurally could not do.
 
 ### Scope contracts
 
@@ -118,6 +120,47 @@ edited JSON. The point of this phase is an *adjustment surface*, not a new runti
 Deliberately out of scope: anything that makes the settings app a dependency of the running
 shell. If it is not installed or not launched, everything must keep working exactly as it
 does now.
+
+**Phase 10 — Quickshell becomes the bar.** Waybar is now mostly a launcher for Quickshell:
+**seven of the sixteen** enabled modules are buttons whose entire job is `qs ipc call`
+(`pulseaudio`, `bluetooth`, `network`, `custom/controlcenter`, `custom/ml4w-welcome`,
+`image#claude-usage`, `clock`). The Claude dial is the reductio — a PNG rendered to disk by
+pycairo every 60s and poked with `pkill -RTMIN+8`, purely because Waybar cannot draw an arc.
+Keeping a second toolkit, a second theme system and a second config language for that is the
+tail wagging the dog.
+
+- **Our own `BarApp`, not ML4W's `StatusbarApp`.** ML4W's Quickshell bar is real code, but it
+  is a centred *pill* with a different design intent, it is missing the majority of what this
+  bar shows (taskbar, network, the dial, the Control Center, window title, nowplaying,
+  appmenu, quicklinks), it is single-`PanelWindow` with no `Variants`, and it lives on the
+  ML4W clobber list in [docs/quickshell-patches.md](docs/quickshell-patches.md). Adopting it
+  would put the least durable file in the most important position. `BarApp` is instead a
+  seventh app in `quickshell/`, symlinked and git-tracked like the other six. Its widgets are
+  free to be *derived* from `StatusbarApp` — that is good donor code.
+- **`Variants` over screens from the start.** Only eDP-1 exists today, so this is insurance
+  rather than a feature, but retrofitting it is a rewrite of the root object.
+- **Parity first, then the wins.** Every enabled module is replicated before the cutover, so
+  the switch is a non-event and the comparison stays honest. The Waybar-blocked additions
+  (§ below) land in the same phase but *after* parity, never as a reason to skip a module.
+- **Waybar stays installed and one keypress away.** ML4W already ships the switch:
+  `~/.config/ml4w/settings/statusbar` plus a `waybar-disabled` sentinel that
+  `~/.config/waybar/launch.sh` honours, bound to `SUPER+CTRL+B`. There is no need to invent a
+  "theme" to park the old setup in — the old setup stays exactly where it is. Waybar is only
+  removed, if ever, as a separate deliberate step.
+
+What Waybar structurally could not do, and this phase takes:
+
+- the Claude dial as a `Canvas`, deleting the PNG/signal-8 pipeline from `claude-usage.py`
+- an audio visualiser (this Waybar build has no `cava` and would need a rebuild)
+- taskbar window buttons driven by `Quickshell.Wayland` toplevels — real `activate()` and
+  `close()` instead of the Hyprland-0.56 Lua-dispatch workaround, and window previews
+
+Out of scope: absorbing the existing panels. `BarApp` triggers them exactly as Waybar did.
+And per the settings rule above, no settings UI — `BarApp` reads a file, hyprsys edits it.
+
+**Cross-repo consequence:** hyprsys's generated Waybar page is driven off `modules.json`. If
+the bar stops being Waybar, that page has nothing to configure and `BarApp`'s own settings
+file takes its place. Worth knowing before hyprsys phase 3, not after.
 
 ## Constraints
 
@@ -194,5 +237,16 @@ its phase 6.
 
 ## Next
 
-The settings app is no longer this repo's next step — see above. Everything else is in
-[BACKLOG.md](BACKLOG.md).
+**Phase 10 — the Quickshell bar.** Step order, each one flippable back to Waybar:
+
+1. The frame — `PanelWindow` under `Variants`, exclusion zone, `CustomTheme` palette, the
+   three-group layout, and the modules that are pure buttons.
+2. The built-in replacements — workspaces, clock, battery, and the volume / Bluetooth /
+   network indicator labels whose panels already exist.
+3. The taskbar, off `Quickshell.Wayland` toplevels + `DesktopEntries.heuristicLookup()`.
+4. Window title, nowplaying (`Quickshell.Services.Mpris`), appmenu, quicklinks.
+5. The Claude dial as a `Canvas`.
+6. Cut over via the ML4W statusbar switch; Waybar stays installed.
+7. The Waybar-blocked wins — visualiser, window previews.
+
+Everything else is in [BACKLOG.md](BACKLOG.md).
