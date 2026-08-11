@@ -61,6 +61,14 @@ NOTIFICATIONS = [
 
 CONTROL_CENTER = [
     Field(
+        "weather_location",
+        "Weather location",
+        "A city name, an airport code, \"lat,lon\", or \"~Landmark\". Leave empty "
+        "to let wttr.in guess from the IP — which follows the VPN exit when "
+        "Tailscale is routing, so it is worth pinning.",
+        kind="text",
+    ),
+    Field(
         "collapsed",
         "Collapsed sections",
         "Which sections come up shut. Set by collapsing them in the panel itself.",

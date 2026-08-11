@@ -16,9 +16,13 @@ hammering it earns a 503. So the result is cached on disk and only refetched onc
 is older than TTL. The Control Center calls this every time it opens; almost all of
 those calls are served from the cache without touching the network.
 
-**Location is geo-IP by default**, which lands on the VPN exit rather than here
-whenever Tailscale is routing. Set WEATHER_LOCATION (or edit DEFAULT_LOCATION) to
-pin it — wttr.in takes a city name, "Colombo", or an airport code, "CMB".
+**Location is geo-IP by default**, which is coarse — it resolves to whichever exchange
+the ISP hands out, and lands on the VPN exit entirely whenever Tailscale is routing. To
+pin it, set `weather_location` in ~/.config/waybar-control-center/control-center.json;
+that is the file the panel already owns, so the Settings app can edit it and there is
+nothing to restart. WEATHER_LOCATION in the environment overrides the file, and
+DEFAULT_LOCATION below is the last fallback. wttr.in takes a city name ("Colombo"),
+an airport code ("CMB"), "~Some+Place" for a landmark, or a raw "6.9271,79.8612".
 
 Output is always a JSON object. On failure it carries an "error" key and, if there is
 one, the last good reading alongside it, so the panel can show stale data with a note
@@ -30,12 +34,28 @@ import os
 import subprocess
 import sys
 import time
+import urllib.parse
 
 CACHE_DIR = os.path.expanduser("~/.cache/waybar-control-center")
 CACHE = os.path.join(CACHE_DIR, "weather.json")
+SETTINGS = os.path.expanduser(
+    "~/.config/waybar-control-center/control-center.json")
 TTL = 1800  # seconds; matches the old bar module's interval
 DEFAULT_LOCATION = ""  # "" = wttr.in geo-IP guess
-LOCATION = os.environ.get("WEATHER_LOCATION", DEFAULT_LOCATION)
+
+
+def configured_location():
+    try:
+        with open(SETTINGS) as f:
+            value = json.load(f).get("weather_location", "")
+        if isinstance(value, str) and value.strip():
+            return value.strip()
+    except Exception:
+        pass
+    return DEFAULT_LOCATION
+
+
+LOCATION = os.environ.get("WEATHER_LOCATION") or configured_location()
 
 # wttr.in's own condition codes -> icon ligature names.
 #
@@ -122,7 +142,10 @@ def write_cache(payload):
 
 
 def fetch():
-    url = "https://wttr.in/%s?format=j1" % LOCATION
+    # quote(): a location is free text out of a config file - "New York" or
+    # "~Sigiriya Rock" have to survive as one path segment. safe="~," keeps the
+    # landmark prefix and the lat,lon form intact rather than percent-encoding them.
+    url = "https://wttr.in/%s?format=j1" % urllib.parse.quote(LOCATION, safe="~,")
     # curl rather than urllib: it already honours the proxy env and gives a clean
     # timeout, and it is what the old bar module used.
     out = subprocess.run(
@@ -175,6 +198,10 @@ def shape(raw):
         "observed": current.get("localObsDateTime", ""),
         "days": days,
         "fetched": int(time.time()),
+        # What was asked for, not what wttr.in resolved it to. Changing the setting
+        # has to invalidate the cache, and comparing against the resolved "location"
+        # would not do that - "Colombo" comes back as "Colombo, Sri Lanka".
+        "queried": LOCATION,
     }
 
 
@@ -186,6 +213,7 @@ if __name__ == "__main__":
         cached
         and not force
         and not cached.get("error")
+        and cached.get("queried", "") == LOCATION
         and (time.time() - cached.get("fetched", 0)) < TTL
     )
     if fresh_enough:

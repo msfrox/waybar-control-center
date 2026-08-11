@@ -130,16 +130,22 @@ PanelWindow {
         repeat: true
         triggeredOnStart: true
         running: root.isOpen
-        onTriggered: {
-            root.refresh()
-            root.pollBrightness()
-        }
+        onTriggered: root.refresh()
     }
 
     // --- BRIGHTNESS ---
-    // Off the 2-second stats tick: reading the external monitor is a DDC/CI
-    // round-trip over I2C, which is slow and does not like being hammered. Read
-    // on open, and after a drag settles.
+    // Read once, on open, and never polled. Both readings are expensive in their own
+    // way -- the external monitor is a DDC/CI round-trip over I2C, which is slow and
+    // does not like being hammered -- and neither needs to be repeated: while the
+    // panel is up, the slider itself is the authority on what the brightness is. The
+    // percentage beside it tracks the handle, not a reading, so a drag reads back
+    // instantly with no process spawned to confirm it.
+    //
+    // The cost is that pressing the laptop's brightness keys with the panel already
+    // open leaves the internal slider stale until it is reopened. That was worth a
+    // 2-second poll when only the internal panel could be polled cheaply; it is not
+    // worth one now that the external slider -- which cannot be polled cheaply at
+    // all -- is the one being used.
     property var brightness: ({})
 
     Process {
@@ -154,34 +160,6 @@ PanelWindow {
 
     function reloadBrightness() {
         if (!brightnessProc.running) brightnessProc.running = true
-    }
-
-    // The panel used to read brightness only in onIsOpenChanged, so pressing the
-    // laptop's brightness keys while it was open left both sliders showing whatever
-    // was true when it opened - you had to close and reopen to see the real value.
-    // The internal panel is a plain sysfs read, so it can ride the 2-second tick;
-    // "get-internal" exists precisely so this poll does not drag the slow DDC read
-    // along with it. The external monitor stays on open + after a drag settles.
-    Process {
-        id: brightnessInternalProc
-        command: [Quickshell.env("HOME") + "/.config/waybar/scripts/brightness.py",
-                  "get-internal"]
-        stdout: StdioCollector {
-            onStreamFinished: {
-                try {
-                    const payload = JSON.parse(this.text)
-                    if (!payload.internal) return
-                    // Merged, not assigned: the reply has no "external" key and a
-                    // straight assignment would drop the monitor's slider.
-                    root.brightness = Object.assign({}, root.brightness,
-                                                    { internal: payload.internal })
-                } catch (e) {}
-            }
-        }
-    }
-
-    function pollBrightness() {
-        if (!brightnessInternalProc.running) brightnessInternalProc.running = true
     }
 
     // --- WEATHER ---
@@ -403,6 +381,10 @@ PanelWindow {
             root.hiddenSections = settings.hiddenSections
             root.hiddenActions = settings.hiddenActions
             root.publishCatalogue()
+            // Picks up a location edit without a restart. Cheap: weather.py only
+            // reaches the network when the location actually changed or the cache
+            // has aged out, so the writes this panel does itself cost a file read.
+            root.reloadWeather()
         }
 
         // No file yet is the normal first-run case, not an error - every
@@ -423,6 +405,10 @@ PanelWindow {
             // description of what settings exist.
             property var sections: []
             property var actions: []
+            // Read by weather.py, never written here - but it has to be declared
+            // for the same reason the hyprsys keys above are: an undeclared key is
+            // dropped on the next writeAdapter().
+            property string weather_location: ""
         }
     }
 
@@ -668,11 +654,10 @@ PanelWindow {
             onMoved: brow.moved(Math.round(value))
 
             // Dragging a Slider assigns `value` imperatively, and that destroys the
-            // `value: brow.percent` binding above for good. So even once a live
-            // reading was polled in, the handle stayed where the user last left it -
-            // the binding it was relying on no longer existed. Re-assert it on each
-            // new reading, but never while the handle is held, or the poll would
-            // yank the slider out from under the drag.
+            // `value: brow.percent` binding above for good - so the next reading on
+            // open would land in a property nothing was watching, and the handle
+            // would stay where it was last dragged. Re-assert the binding on each new
+            // reading, but never while the handle is held.
             Connections {
                 target: brow
                 function onPercentChanged() {
@@ -710,7 +695,11 @@ PanelWindow {
         }
 
         Text {
-            text: brow.percent + "%"
+            // The handle, not the last reading. `brow.percent` is only refreshed when
+            // the panel opens, so reading from it left the number frozen at the value
+            // the slider started on for the whole drag - most visibly on the external
+            // monitor, whose reading is never refreshed while the panel is up at all.
+            text: Math.round(brightSlider.value) + "%"
             font.family: Theme.fontFamily
             font.pixelSize: 12
             color: Theme.on_surface

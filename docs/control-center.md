@@ -138,6 +138,24 @@ the first detect and writes are debounced: a drag emits a value per pixel and ea
 would otherwise be its own I2C round-trip. Internal is floored at 1% — a slider that can
 reach 0 leaves you with a black panel and no way to see the slider you need to drag back.
 
+**Brightness is read once, on open, and never polled — and the percentage beside each
+slider is read off the handle, not off that reading.** Those two go together. An earlier
+version polled the internal panel on the 2-second tick so the slider would follow the
+laptop's brightness keys, which meant the *external* slider's number was frozen for the
+whole drag: its reading only refreshes on open, and a DDC/CI `getvcp` is far too slow to
+put on a tick. Binding the label to `brightSlider.value` makes both sliders read back
+instantly with no process spawned to confirm what the user just did, and once the label
+no longer depends on a fresh reading there is nothing left for the poll to buy. The
+trade is that the brightness keys no longer move the slider under an already-open panel.
+
+**Weather location comes out of `control-center.json`, not the environment.** `weather.py`
+reads `weather_location` from the panel's own settings file, falling back to
+`WEATHER_LOCATION` then to geo-IP. Two consequences worth knowing: the key must be
+declared in the `JsonAdapter` or the next `writeAdapter()` deletes it (same trap as the
+hyprsys-owned keys), and the cache records what was *asked for* under `queried` — not what
+wttr.in resolved it to, since "Colombo" comes back as somewhere else entirely — so that
+changing the setting invalidates the cache instead of waiting out the 30-minute TTL.
+
 **`mode_fan` is Material *Symbols*, not Material Icons.** The Round font here has no fan
 glyph; `toys` (a pinwheel) is the closest that actually renders. A missing ligature renders
 as the literal fallback, not as nothing, so it is easy to miss.
