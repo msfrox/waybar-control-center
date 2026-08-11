@@ -59,6 +59,10 @@ Rectangle {
     // Set by modules that want to signal state rather than just sit there —
     // a muted volume, a disconnected network, an active toggle.
     property bool active: false
+    // Exposed because a module that overrides `contentColor` to show state — muted
+    // audio, a disconnected network, a critical battery — still has to fold the hover
+    // recolour back in, and a derived component cannot see the MouseArea's id.
+    readonly property alias hovered: mouse.containsMouse
     // Bare modules hover by RECOLOURING to @primary, not by showing a plate — that
     // is what the Waybar sheet does and it is the difference between the cutover
     // being invisible and the bar feeling subtly wrong. Pills are the ones that
@@ -69,6 +73,51 @@ Rectangle {
 
     property int glyphSize: 20
     property int labelSize: 13
+    // ICON RUNS INSIDE THE LABEL.
+    //
+    // Waybar renders each status module as ONE GTK label whose format string mixes
+    // text with Font Awesome codepoints in the Unicode private use area, and its CSS
+    // font-family is a CHAIN that resolves each character to whichever family has it.
+    // Neither of Qt's two obvious equivalents works here:
+    //
+    //   * `font.families` is rejected outright by Quickshell 0.3.0 ("Cannot assign to
+    //     non-existent property"), even though plain Qt 6.11 accepts it.
+    //   * Automatic fontconfig fallback is not a substitute. Four of the glyphs this
+    //     bar needs - U+F6A9 muted, U+F796 network-wired, U+F5E7 charging bolt and
+    //     U+F590 headset - exist in exactly ONE installed font, Font Awesome 7 Free,
+    //     and the only file behind that family name is its Solid-900 face. Fallback
+    //     resolves the family to a Regular-400 face that genuinely lacks them, so they
+    //     render as tofu. StyledText's `<font face=...>` fails identically, because a
+    //     face attribute cannot carry a weight.
+    //
+    // Asking for weight 900 explicitly is what fixes it. So the label is split into
+    // runs here: private-use characters render in the icon family at 900, everything
+    // else in the UI font. Keeping that inside BarButton means each module still sets
+    // one `label` to Waybar's format string verbatim - including the ones that put an
+    // icon AFTER the text (pulseaudio's format-bluetooth) or use two icons at once.
+    property string iconFamily: "Font Awesome 7 Free"
+    property int iconWeight: 900
+
+    // `label` as alternating text / icon runs, in order.
+    function labelRuns(s: string): var {
+        let out = [], cur = "", curIcon = false
+        for (let i = 0; i < s.length; i++) {
+            const c = s.charCodeAt(i)
+            // The private use area. Font Awesome, Nerd Fonts and Material Icons all
+            // live in here; ordinary text does not, and neither do the stray symbols
+            // these format strings use (U+2713 check, U+26A0 warning) - those stay in
+            // the UI font and reach a symbol font through ordinary fallback.
+            const isIcon = c >= 0xe000 && c <= 0xf8ff
+            if (cur !== "" && isIcon !== curIcon) {
+                out.push({ icon: curIcon, text: cur })
+                cur = ""
+            }
+            curIcon = isIcon
+            cur += s[i]
+        }
+        if (cur !== "") out.push({ icon: curIcon, text: cur })
+        return out
+    }
     // Zero, because Waybar's bare modules are `padding: 0px` and space themselves
     // with margins alone. Pills override it (#clock is `padding: 1px 10px`).
     // Anything non-zero here shows up as the bar reading looser than the one it
@@ -82,9 +131,19 @@ Rectangle {
     signal scrolled(int delta)
 
     implicitWidth: Math.max(minWidth, row.implicitWidth + hpadding * 2)
-    // Pills do not fill the bar's full height — the Waybar CSS insets them 3px top
-    // and bottom. Bare modules do fill it, so their hover plate covers the strip.
-    implicitHeight: parent ? parent.height - (pill ? 6 : 0) : 32
+
+    // GTK sizes a pill from its CONTENT and never stretches it to the bar, so the
+    // height is a constant, not a function of `parent.height`. Measured off the live
+    // Waybar: every pill on it — #clock, #workspaces button — is 34.7px tall inside a
+    // 52px bar, leaving an 8.7px gap above and below. Deriving it from the bar
+    // instead (the old `parent.height - 6`) gave 46px pills that visibly touched the
+    // bar's edges, which is the single most obvious "this isn't Waybar" tell.
+    //
+    // Bare modules are not pills and do follow the bar, but the sheet still insets
+    // them 6px top and bottom (`margin: 6px 0px 6px 0px`). They draw no plate, so
+    // that only sets the click target — which is still worth matching.
+    property int pillHeight: 35
+    implicitHeight: pill ? pillHeight : (parent ? parent.height - 12 : 32)
     // Layout.alignment, not anchors: every module sits in one of the bar's three
     // RowLayouts, and anchoring an item a layout manages is undefined behaviour
     // (Qt warns, then does something arbitrary with the height).
@@ -149,13 +208,31 @@ Rectangle {
             verticalAlignment: Text.AlignVCenter
         }
 
-        Text {
-            visible: btn.label !== ""
-            text: btn.label
-            font.family: Theme.fontFamily
-            font.pixelSize: btn.labelSize
-            color: btn.contentColor
-            verticalAlignment: Text.AlignVCenter
+        // One Text per run, laid out edge to edge so they read as the single label
+        // Waybar draws. The RowLayout's own spacing would open a gap between an icon
+        // and the text beside it, so the runs get their own zero-spacing Row.
+        Row {
+            spacing: 0
+            Layout.alignment: Qt.AlignVCenter
+
+            Repeater {
+                model: btn.labelRuns(btn.label)
+
+                delegate: Text {
+                    required property var modelData
+                    text: modelData.text
+                    font.family: modelData.icon ? btn.iconFamily : Theme.fontFamily
+                    // DemiBold, not Normal, for the text runs. "Fira Sans Semibold"
+                    // names a STYLE inside the Fira Sans family, so asking for it by
+                    // family name alone and then pinning weight 400 gets the Regular
+                    // face — which measured 12px narrower than the same string on
+                    // Waybar. 600 is what Semibold means.
+                    font.weight: modelData.icon ? btn.iconWeight : Font.DemiBold
+                    font.pixelSize: btn.labelSize
+                    color: btn.contentColor
+                    verticalAlignment: Text.AlignVCenter
+                }
+            }
         }
     }
 

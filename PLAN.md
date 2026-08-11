@@ -239,12 +239,22 @@ its phase 6.
 
 **Phase 10 — the Quickshell bar.** Step order, each one flippable back to Waybar:
 
-1. The frame — `PanelWindow` under `Variants`, exclusion zone, `CustomTheme` palette, the
-   three-group layout, and the modules that are pure buttons.
-2. The built-in replacements — workspaces, clock, battery, and the volume / Bluetooth /
-   network indicator labels whose panels already exist.
+1. ✅ The frame — `PanelWindow` under `Variants`, exclusion zone, `CustomTheme` palette,
+   the three-group layout, and the modules that are pure buttons.
+2. ✅ The built-in replacements — `ext/workspaces`, battery off `Quickshell.Services.UPower`,
+   and the volume / Bluetooth / network indicator labels whose panels already exist.
 3. The taskbar, off `Quickshell.Wayland` toplevels + `DesktopEntries.heuristicLookup()`.
-4. Window title, nowplaying (`Quickshell.Services.Mpris`), appmenu, quicklinks.
+4. Window title, nowplaying (`Quickshell.Services.Mpris`), and **quicklinks**.
+   Quicklinks is the one with structure worth knowing before starting: on Waybar it is a
+   `group/quicklinks` *hover-expand drawer* whose toggle is `custom/quicklinkstoggle` (a
+   single `>` glyph) and whose contents are **not in `modules.json` at all** — they live in
+   `~/.config/ml4w/settings/waybar-quicklinks.json` as `custom/quicklink_*` entries, each a
+   Font Awesome `format` glyph plus an `on-click`. That file is ML4W-owned, so `BarApp`
+   should **read it** through a `FileView` the way it already reads `bar.json`, and get new
+   links for free when ML4W's own editor writes them. Hardcoding the launcher list would
+   mean editing QML every time a link changes, and would silently diverge from the drawer
+   Waybar still shows during the side-by-side period.
+   (`custom/appmenu` is already done — it landed in step 1.)
 5. The Claude dial as a `Canvas`.
 6. Cut over via the ML4W statusbar switch; Waybar stays installed.
 7. The Waybar-blocked wins — visualiser, window previews.

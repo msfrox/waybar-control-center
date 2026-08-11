@@ -1,19 +1,18 @@
 # Handoff
 
-**State: phases 0–8 shipped; phase 10 (the Quickshell bar) is at step 1 of 7.** Repo:
-`msfrox/waybar-control-center` (public). Everything is symlinked into `~/.config` by
-`install.sh`, so editing the repo edits the live desktop.
+**State: phases 0–8 shipped; phase 10 (the Quickshell bar) is at step 2 of 7, done.**
+Repo: `msfrox/waybar-control-center` (public). Everything is symlinked into `~/.config`
+by `install.sh`, so editing the repo edits the live desktop.
 
-**Phase 10 replaces Waybar with `quickshell/BarApp/`** — our own bar, not ML4W's
-`StatusbarApp`. See PLAN.md for the reasoning and the step list. Right now **both bars
-run at once**: `BarApp` is anchored to the *top* (`position: "top"` in `bar.json`) and
-Waybar still owns the bottom, so the two can be screenshot side by side and compared.
-`hyprctl monitors -j` shows `reserved: [0, 52, 0, 52]` while that is true.
+**Both bars run at once right now**: `BarApp` is anchored to the *top* (`position: "top"`
+in `bar.json`) and Waybar still owns the bottom, so the two can be screenshot and compared
+directly. `hyprctl monitors -j` shows `reserved: [0, 52, 0, 52]` while that is true.
+Compare with `grim -g "0,0 1920x52"` (ours) and `grim -g "0,1148 1920x52"` (Waybar's).
 
-Step 1 is done: the frame (`Variants` over screens, exclusion zone, three module groups),
-`BarButton`, the app-menu / Control Center / ML4W-logo buttons, and the clock. They are
-pixel-close to their Waybar originals. Step 2 is the workspaces, clock, battery and the
-volume / Bluetooth / network indicators.
+Steps 1–2 are done: the frame, `BarButton`, the app-menu / Control Center / ML4W-logo
+buttons, the clock, `ext/workspaces`, battery, and the volume / Bluetooth / network
+indicators. They measure pixel-equal to their Waybar originals (see *Matching Waybar's
+geometry* below). Step 3 is the taskbar.
 
 ## Resume
 
@@ -21,9 +20,9 @@ volume / Bluetooth / network indicators.
 cd ~/Projects/waybar-control-center && ./install.sh
 ```
 
-Reload after a change: `~/.config/waybar/launch.sh` for bar changes. Quickshell hot-reloads
-QML on save, but **not reliably through the repo symlinks** — if a QML edit appears to do
-nothing, `pkill -x qs` and relaunch `qs -d` before believing the change is wrong.
+Reload after a change: **`pkill -x qs; qs -d`**. Quickshell claims to hot-reload QML, but
+not reliably through the repo symlinks — if a QML edit appears to do nothing, restart
+before believing the change is wrong. `~/.config/waybar/launch.sh` reloads Waybar.
 
 ## What exists
 
@@ -35,127 +34,135 @@ nothing, `pkill -x qs` and relaunch `qs -d` before believing the change is wrong
 | `image#claude-usage` | usage panel | `quickshell/ClaudeUsageApp` |
 | `custom/controlcenter` | Control Center | `quickshell/ControlCenterApp` |
 | `clock` | notification centre — clock, calendar, notification list | `quickshell/NotificationCenterApp` |
-| `custom/appmenu` | app launcher, centre of the bar | ML4W's |
-| `hyprland/workspaces` | grouped taskbar — window icons per workspace | Waybar built-in + `taskbar-window-click.sh` |
 
-Backends in `waybar/scripts/`: `claude-usage.py`, `network-details.py`, `system-stats.py`,
-`easyeffects-status.py`, `brightness.py`, `weather.py`, `taskbar-window-click.sh`.
+`quickshell/BarApp/` is the bar: `BarWindow` (frame + module groups), `BarButton` (the
+shared module base), and `Clock` / `Workspaces` / `Volume` / `Bluetooth` / `Network` /
+`Battery` modules. Backends in `waybar/scripts/`.
 
-IPC targets: `qs ipc show`. The ones this repo owns are `audio`, `bluetooth`, `network`,
-`claude-usage`, `control-center`, `notifications`, `notification-state`.
+IPC targets: `qs ipc show`. This repo owns `audio`, `bluetooth`, `network`,
+`claude-usage`, `control-center`, `notifications`, `notification-state`, `bar`.
 
 ## Porting a Waybar module to `BarApp` — read this first
-
-Four traps, all found in step 1, all of which look like QML bugs and are not.
 
 - **The `colored` variant remaps four colour names before importing the shared sheet**
   (`themes/ml4w-modern/colored/style.css:5-8`): `on_surface`→`on_secondary`,
   `background`→`secondary`, `border_color`→`secondary`, `icon_color`→`on_secondary`.
   So `#clock { background: @background; color: @on_surface }` is really a **light** pill
-  with **dark** text. Copy the CSS names across literally and you get the inverse of what
-  is on screen. Resolve through that table first, then map to `Theme.*`.
+  with **dark** text. Resolve through that table first, then map to `Theme.*`.
+  On *bare* modules use `Theme.on_surface` — it is the genuine Matugen value, not the
+  variant's override, and equals `@bar_fg` (`#dde4e3`) exactly.
 - **A module's "icon" is not always text.** `custom/ml4w-welcome`'s `format` is a single
-  space; the logo arrives as a CSS `background-image`. Porting the format across as a
-  glyph gives a button that is invisible but still clickable. Check the CSS for a
-  `background-image` before assuming the format string is the whole module.
-- **Bare modules hover by recolouring to `@primary`, not by showing a plate**, and they
-  carry `text-shadow: 0 1px 3px rgba(0,0,0,0.85)` so a light glyph survives a bright
-  wallpaper through the translucent bar. Pills are the ones that change fill.
-- **Never put `anchors` on an item inside a `RowLayout`.** Qt warns *"Detected anchors on
-  an item that is managed by a layout"* and then sizes it arbitrarily. `BarButton` uses
-  `Layout.alignment: Qt.AlignVCenter`.
+  space; the logo arrives as a CSS `background-image`. Check the CSS for one before
+  assuming the format string is the whole module.
+- **Bare modules hover by recolouring to `@primary`, not by showing a plate.** Pills are
+  the ones that change fill.
+- **Never put `anchors` on an item inside a `RowLayout`.** Qt warns and then sizes it
+  arbitrarily. Use `Layout.alignment` / `Layout.*`.
+- Waybar's `config` sets `spacing: 0` and expresses every gap as a per-module CSS margin,
+  so `BarButton.rightMargin` is the only place a gap belongs.
 
-Waybar's `config` sets `spacing: 0` and expresses every gap as a per-module CSS margin,
-so `BarButton.rightMargin` is the only place a gap belongs. Bare modules are
-`padding: 0px`; `hpadding` defaults to 0 for that reason.
+### Fonts — the trap that looks like a QML bug
+
+Waybar draws each status module as ONE label mixing text with Font Awesome private-use
+codepoints, resolved by a CSS font-family **chain**. Neither Qt equivalent works:
+
+- **Quickshell 0.3.0 rejects `font.families`** ("Cannot assign to non-existent property"),
+  even though plain Qt 6.11 accepts it. Verified with a minimal `qs -p` config.
+- **Automatic fontconfig fallback is not a substitute.** Four glyphs this bar needs —
+  `U+F6A9` muted, `U+F796` network-wired, `U+F5E7` charging bolt, `U+F590` headset —
+  exist in exactly ONE installed font, Font Awesome 7 Free, whose only file is the
+  **Solid-900** face. Fallback resolves the family to a Regular-400 face that genuinely
+  lacks them, so they render as tofu. `<font face=…>` in StyledText fails identically,
+  because a face attribute cannot carry a weight.
+
+`font.weight: 900` is the fix. `BarButton` splits `label` into private-use vs text runs
+and renders icon runs in `iconFamily` at 900 — so modules still set one `label` to
+Waybar's format string verbatim, including those that put an icon *after* the text.
+Qt falls back to FA **Brands** for `U+F293`/`U+F294` under that same request, so one
+family covers everything.
+
+Two corollaries:
+
+- **Text runs need `font.weight: Font.DemiBold`.** "Fira Sans Semibold" names a *style*
+  inside the Fira Sans family; asking for it by family name and pinning weight 400 gets
+  the Regular face, which measured 12px narrower than the same string on Waybar.
+- **Raw private-use characters do not survive being written to a file** — they were
+  silently stripped from a heredoc, a source comment and two agent-written modules.
+  **Always write `\uXXXX` escapes.** Check with a byte scan, not by eye: `Read` renders
+  these characters as blank, so a stripped glyph and a present one look identical.
+
+### Matching Waybar's geometry
+
+GTK sizes a pill from its **content** and never stretches it to the bar. Deriving height
+from `parent.height` gave 46px pills against Waybar's 34.7px, which touched the bar edges
+and was the most obvious "this isn't Waybar" tell. Measured off the live bar:
+
+| | Waybar | meaning |
+|---|---|---|
+| pill height | 34.7px in a 52px bar | 8.7px gap above and below |
+| active ws pill | 46.7px | CSS `min-width: 30` + 12 padding + 4 border |
+| inactive ws pill | 32.7px | **16** + 12 padding + 4 border |
+
+That **16 is GTK Adwaita's default `button { min-width }`**. The theme sheet never
+restates it, so it is invisible in the CSS and is why a pill sized purely from its label
+comes out ~12px too narrow.
+
+**`min-width` on a container is not `Layout.minimumWidth`.** GTK widens the container and
+leaves the slack empty; a RowLayout forced past its content width hands the slack to its
+*items*, which pushed the workspace pills 17px apart against Waybar's 6px. A trailing
+`Item { Layout.fillWidth: true }` absorbs it.
 
 ## Live gotchas
 
-- **A commented-out module line needs a LEADING comma.** `"clock"` is the last entry in
-  `modules-right` and carries no trailing comma, so uncommenting a `//"mpris",` under it
-  produced `"clock" "mpris"` — Waybar then refuses to start with
-  `Error parsing JSON: Missing ',' or ']' in array declaration` and the bar simply never
-  appears. The dormant entries are therefore written `//,"mpris"`. A trailing comma before
-  the closing `]` *is* tolerated, so leading commas are safe in any combination.
-- **`workspace-taskbar` needs `{windows}` in the workspace `format`.** Undocumented in the
-  man page; it is the flag the source tests. Without it the module loads and styles
-  correctly and no window icon is ever added — it reads as a CSS bug and is not.
-  Workspace *labels* are also unclickable by design here; see
-  `waybar/modules/workspace-taskbar.json` for why, and why `ext/workspaces` stays on the left.
-- **Both workspace modules render as `#workspaces`.** `ext/workspaces` (left) and
-  `hyprland/workspaces` (centre) share the id, so the left module's pill styling lands on
-  every window icon in the centre. All of `waybar/style/workspace-taskbar.css` is scoped to
-  `.modules-center` for that reason.
-- **Taskbar window tooltips are free, but the title only stays current with a decoy
-  `window-rewrite` rule.** Waybar calls `set_tooltip_text(window_title)` on every window
-  box unconditionally — there is no `tooltip-format` for `workspace-taskbar` and none is
-  needed, hovering an icon already names the window. What *is* conditional is the
-  `windowtitlev2` subscription: `windowRewriteConfigUsesTitle() || m_taskbarWithTitle`,
-  where the second is literally `format.find("{title")`. An icon-only taskbar satisfies
-  neither, so a title that changes while the window sits still is never seen and the
-  tooltip keeps naming whatever was open at the last taskbar rebuild. The unmatchable
-  `title<...>` rule in the module config is there only to flip the first test; waybar
-  confirms it at startup with *"Registering for Hyprland's 'windowtitlev2' events because
-  a user-defined window rewrite rule uses the 'title' field."* The rewrite output itself
-  is unused while the taskbar draws real icons.
-- **On the bar, use `@bar_fg` — `@on_surface` is not always light.** The active
-  `ml4w-modern/colored` variant redefines `@on_surface` to `@on_secondary` (`#22323f`,
-  near-black) because the left workspace pills sit on an opaque light `@background`. Any
-  module drawn *transparent*, straight onto the bar's `rgba(16,20,23,0.6)`, therefore goes
-  dark-on-dark and vanishes — which is exactly how the centre taskbar's workspace numbers
-  became invisible. `@bar_fg` is pinned light in `colors.css` for this case and is what
-  every other bare-glyph module on this bar already uses.
-- **This Waybar build has no `cava`.** It logs `Unknown module` and leaves a gap. Needs a
-  rebuild with `-Dcava=enabled`.
+- **Never name an `IpcHandler` function `show`.** `qs ipc call bar show` is swallowed by
+  the CLI's own `ipc show` subcommand: it prints the handler listing, exits 0, and never
+  reaches QML. Ours is `enable`/`disable` now, which is also what ML4W's `statusbar`
+  handler uses. Assume any other CLI verb is booby-trapped too.
+- **PipeWire node properties do not carry `device.form_factor` or the active port.** Both
+  live on the *device*, so Waybar's per-port `format-icons` (headset/headphone/car…)
+  cannot be resolved the way Waybar does it. `VolumeModule` keys off `device.api ==
+  "bluez5"`, which IS on the node; the cost is that a Bluetooth *speaker* would also draw
+  as a headset.
+- **Waybar's `network` signal reading goes stale.** It showed 33–40% while `nmcli` and
+  our module both read ~48%. Ours is live off `Quickshell.Networking`; a difference here
+  is Waybar being wrong, not us.
+- **`signalStrength` is a 0..1 double**, verified against `nmcli` and NetworkManager's
+  D-Bus `AccessPoint.Strength` at the same instant. Scale by 100 for Waybar's `{}%`.
+- **No icon font here has a three-wave speaker.** Font Awesome and Material Design both
+  stop at two (`volume-off` / `-low` / `-high`), so the volume ramp is three steps, not
+  four. This is the one place `BarApp` knowingly deviates from `modules.json` — Waybar's
+  own array duplicates its top glyph and only ever shows two pictures.
+- **A commented-out module line needs a LEADING comma.** `"clock"` is last in
+  `modules-right` and has no trailing comma, so uncommenting a `//"mpris",` under it
+  produces `"clock" "mpris"` and Waybar refuses to start. Dormant entries are `//,"mpris"`.
+- **`workspace-taskbar` needs `{windows}` in the workspace `format`** — undocumented, it
+  is the flag the source tests. Without it no window icon is ever added.
 - **Hyprland 0.56 parses dispatch payloads as Lua.** `dispatch focuswindow address:0x…`
-  errors; the working forms are `hl.dsp.focus({ window = "address:0x…" })` and
-  `hl.dsp.window.close({ window = "address:0x…" })`. Note `focuswindow` and `killactive`
-  do not exist as Lua fields at all — `hl.dsp.window` is a *table*, not a function.
-  Enumerate with `hyprctl eval` writing to a file; `hyprctl dispatch` wraps its argument in
-  `return hl.dispatch(...)` and cannot introspect.
-- **Weather glyphs must be Material Icons *Round*, not Material Symbols.** `rainy`,
-  `clear_day`, `foggy` and friends are Symbols names, that font is not installed, and a
-  missing ligature renders as *nothing* — the chip loses its icon while the temperature
-  still shows, so it looks like a layout bug. `weather.py`'s `ICONS` map carries a
-  one-liner for verifying a name against the installed font before adding it.
-- **`~/.config/waybar/config` does not exist.** The live pair comes from
-  `~/.config/ml4w/settings/waybar-theme.sh` → `~/.config/waybar/themes/ml4w-modern/`.
-  Confirm with `ps aux | grep '[w]aybar -c'`.
+  errors; use `hl.dsp.focus({ window = "address:0x…" })` and
+  `hl.dsp.window.close({ window = "…" })`. `hl.dsp.window` is a *table*, not a function.
+  Workspaces use `hl.dsp.focus({workspace = 'N'})`; branch on `Hyprland.usingLua`.
+- **Never put a `gradient:` on a card Rectangle.** A QML gradient is a *fill*, so anything
+  translucent inset inside it composites against the gradient, not the wallpaper. Test by
+  setting the fill alpha to `0.0` — if the card looks identical, it was never see-through.
+- **Frosted glass is two halves**: alpha in the QML fill *and* the
+  `quickshell-frosted-glass` layer rule in `~/.config/hypr/shehan/theming.lua`. The whole
+  Quickshell instance shares one layer namespace, `quickshell`.
+- **Material Icons ligatures break inside a Controls `Button`** (it propagates its font
+  onto `contentItem`), and **`highlighted` is FINAL on `Button`** — shadowing it fails the
+  entire config to load with an error pointing at the property rather than the cause.
+  Use a plain `Text` + `MouseArea`. Installed family is **Material Icons Round**.
+- **`pkill -f <pattern>` matches the shell running it.** Use `pkill -x`. This bit again
+  this session: `pgrep -af "qs -p"` matched its own zsh and the follow-up `kill` took out
+  the tool's shell.
+- **Quickshell owns `org.freedesktop.Notifications`.** swaync is D-Bus activatable, so
+  `install.sh` masks `swaync.service`. See `docs/notifications.md`.
 - **ML4W-owned files are patched in place, not shipped**: `modules.json`, the theme
   `config` and `style.css`, plus `CustomTheme/Theme.qml`, `PowerApp/`, `SidebarApp/` and
-  `shell.qml` under `~/.config/quickshell/`. An ML4W update can clobber any of them —
-  `docs/quickshell-patches.md` records what to reapply. (`CalendarApp/` is no longer used.)
-- **Quickshell owns `org.freedesktop.Notifications`.** swaync is D-Bus activatable, so
-  killing it is not enough — `install.sh` masks `swaync.service`, and only that survives a
-  swaync package update or an ML4W dotfiles update. The `pkill` in
-  `~/.config/hypr/shehan/notifications.lua` is the second half, covering ML4W's direct exec.
-  If notifications stop arriving, check the owner and the mask first — `docs/notifications.md`
-  has both one-liners and the full chain.
-- **Never put a `gradient:` on a card Rectangle.** A QML gradient is a *fill*: it paints the
-  whole card, and a translucent rectangle inset inside it then composites against the
-  gradient instead of the wallpaper. Every panel here was opaque for months because of it.
-  Test by setting the fill alpha to `0.0` — if the card looks identical, it was never
-  see-through. Cards are now one Rectangle: translucent fill + hairline `border`.
-- **Frosted glass is still two halves.** Alpha in the QML fill *and* the
-  `quickshell-frosted-glass` layer rule in `~/.config/hypr/shehan/theming.lua`.
-- **Material Icons ligatures break inside a Controls `Button`** — it propagates its own font
-  onto `contentItem`, so `text: "close"` renders the literal word. Use a plain `Text` +
-  `MouseArea`. The installed family is **Material Icons Round**; *Material Symbols Rounded*
-  is not installed and fails the same silent way.
-- **`highlighted` is FINAL on `Button`.** Shadowing it does not warn — it fails the entire
-  Quickshell config to load, with the error pointing at the property rather than the cause.
-- **Never call `StatusNotifierItem.display()` from a focus-grabbed panel.** It opens a
-  separate compositor surface; taking focus clears the `HyprlandFocusGrab`, which closes
-  the panel and the menu with it. Symptom: right-click does nothing, log is clean. Draw the
-  menu inline off `QsMenuOpener` instead. `QsMenuEntry` is activated by emitting its
-  `triggered` signal — there is no callable `activate()`.
-- **`pkill -f <pattern>` matches the shell running it** if the pattern appears in that
-  shell's own command line. Cost a terminal twice today. Use `pkill -x`.
-- **`nm-applet` and `blueman` are masked** via `Hidden=true` in `~/.config/autostart/`.
-  That also removed NetworkManager's secret agent and BlueZ's pairing agent — see
-  `BACKLOG.md`.
-- **Commit authorship is enforced** by `.githooks/commit-msg`, enabled through
-  `core.hooksPath`. `install.sh` sets it; a fresh clone needs it set again.
+  `shell.qml`. `docs/quickshell-patches.md` records what to reapply after an ML4W update.
+- **`~/.config/waybar/config` does not exist.** The live pair comes from
+  `~/.config/ml4w/settings/waybar-theme.sh` → `~/.config/waybar/themes/ml4w-modern/`.
+- **Commit authorship is enforced** by `.githooks/commit-msg` via `core.hooksPath`.
+  A fresh clone needs it set again.
 
 ## Settings files this repo writes
 
@@ -165,69 +172,33 @@ so `BarButton.rightMargin` is the only place a gap belongs. Bare modules are
 | `~/.config/waybar-control-center/notifications.json` | DND flag |
 | `~/.config/waybar-control-center/control-center.json` | per-section collapse state, weather location |
 | `~/.config/waybar-control-center/bar.json` | bar enabled / position / height (phase 10) |
-| `~/.cache/waybar-control-center/notification-history.json` | notification history across restarts (capped at 50) |
+| `~/.cache/waybar-control-center/notification-history.json` | notification history (capped at 50) |
 
-These are what the settings app edits. Each panel already watches its own file through a
-`FileView`, so the settings app never has to talk to the running shell — and that contract
-is what lets the UI move to another repo without either side noticing.
+Each panel watches its own file through a `FileView`, so nothing has to talk to the
+running shell — that contract is what let the settings UI move to another repo.
 
 ## The settings app — moving to hyprsys, do not extend it here
 
-**`settings/` is being absorbed by [hyprsys](https://github.com/msfrox/hyprsys) in its
-phase 3.** It still works and is still installed; nothing is deleted until that lands. But
-no new settings UI is built in this repo — see PLAN.md, "The settings app, moved out".
-
-Both unfinished phase-9 items are **done** (2026-08-06). This repo's half was making the
-state reachable: `ControlCenterApp` reads `hiddenSections` / `hiddenActions` from
-`control-center.json` and publishes a `sections` / `actions` catalogue of what it contains,
-read off its own live children rather than hand-maintained beside them. hyprsys renders the
-switches. Turning Waybar modules on and off is hyprsys's side entirely — it comments the
-module's line out of the theme's `config`.
-
-**If you add a section or a quick-action tile, do nothing else.** The catalogue is derived
-from the live children, so it publishes itself and the setting appears in hyprsys.
-
-`settings/` — a standalone **GTK4/libadwaita** app, not a Quickshell panel.
-`install.sh` symlinks it to `~/.local/bin/waybar-control-center-settings` and installs a
-`.desktop` entry; the Control Center's **Settings** quick action opens it.
-
-```bash
-waybar-control-center-settings --page waybar
-```
-
-It edits the files above and nothing else — no IPC, no daemon. Requires
-`python-gobject`, `gtk4`, `libadwaita`; `install.sh` warns if they are missing.
-
-Read [docs/settings.md](docs/settings.md) before touching it. The two things that will bite:
-`modules.json` is JSONC **owned by ML4W** and is edited by targeted text replacement so its
-176 comments survive; and it is parsed with a scanner, not a regex, because the regex
-version looked correct and silently parsed nothing (real comments in it contain quotes).
+`settings/` is being absorbed by [hyprsys](https://github.com/msfrox/hyprsys) phase 3. It
+still works and is still installed; nothing is deleted until that lands. **No new settings
+UI is built in this repo** — see PLAN.md, "The settings app, moved out". If a panel needs
+a new option, add the setting *file* it reads and stop there.
 
 ## Next
 
-**Phase 10 step 2 — the built-in replacements.** In `BarApp`: `ext/workspaces` (left),
-battery off `Quickshell.Services.UPower`, and the volume / Bluetooth / network indicator
-labels, whose panels already exist and only need a bar-side label plus the same click
-target. Waybar's exact format strings and `format-icons` arrays are the spec; read them
-out of `~/.config/waybar/modules.json` and resolve colours through the remap table above.
-
-Then step 3 (the taskbar, off `Quickshell.Wayland` toplevels +
-`DesktopEntries.heuristicLookup()`), 4 (window title, Mpris nowplaying, quicklinks),
-5 (the Claude dial as a `Canvas`), 6 (cutover), 7 (the Waybar-blocked wins).
+**Phase 10 step 3 — the taskbar**, off `Quickshell.Wayland` toplevels +
+`DesktopEntries.heuristicLookup()`, grouped by workspace like the Waybar original.
+Then step 4 (window title, Mpris nowplaying, quicklinks — PLAN.md has the quicklinks
+structure, which is *not* in `modules.json`), 5 (the Claude dial as a `Canvas`),
+6 (cutover), 7 (the Waybar-blocked wins).
 
 Two things not to lose:
 
 - **`qs ipc call` per click is a placeholder.** `BarApp.panel()` spawns a process to talk
-  to a window in its own process. Replacing it with an in-process signal bus is worth
-  doing when the panels are being edited anyway — deliberately not done in step 1 so that
-  every trigger still behaves identically to the Waybar one it replaces.
+  to a window in its own process. Worth replacing with an in-process signal bus when the
+  panels are being edited anyway — deliberately not done yet so every trigger behaves
+  identically to the Waybar one it replaces.
 - **hyprsys's generated Waybar page dies with Waybar.** It is driven off `modules.json`;
-  once the bar is `BarApp`, `bar.json` is what there is to configure. Worth settling
-  before hyprsys phase 3, not after.
-
-**Not the settings app** — it moved to hyprsys phase 3, along with its two unfinished
-items — all now done. See PLAN.md, "The settings app, moved out". `settings/` here still
-works and is still installed; deleting it and repointing the Control Center's Settings
-tile at `hyprsys` is a deliberate later step.
+  once the bar is `BarApp`, `bar.json` is what there is to configure.
 
 Everything else is in `BACKLOG.md`.

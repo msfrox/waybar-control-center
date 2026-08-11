@@ -64,8 +64,13 @@ Scope {
     IpcHandler {
         target: "bar"
         function toggle(): void { root.setEnabled(!root.barEnabled) }
-        function show(): void { root.setEnabled(true) }
-        function hide(): void { root.setEnabled(false) }
+        // enable/disable, NOT show/hide. `show` is a subcommand of the `qs ipc` CLI
+        // itself, so `qs ipc call bar show` is swallowed before it reaches QML: it
+        // prints the handler listing and exits 0, which reads as a working call that
+        // silently does nothing. ML4W's own `statusbar` handler uses enable/disable
+        // for the same reason. Assume any other CLI verb is booby-trapped too.
+        function enable(): void { root.setEnabled(true) }
+        function disable(): void { root.setEnabled(false) }
         function isEnabled(): bool { return root.barEnabled }
         function reload(): void { settingsFile.reload() }
     }
@@ -147,7 +152,9 @@ Scope {
                 // the single place a gap is expressed.
                 spacing: 0
 
-                // Step 2 fills this: workspaces, quicklinks, nowplaying, window title.
+                WorkspacesModule {}
+
+                // Step 4 adds quicklinks, nowplaying and the window title here.
             }
 
             RowLayout {
@@ -184,8 +191,16 @@ Scope {
                 // the single place a gap is expressed.
                 spacing: 0
 
-                // Step 2 inserts the volume / Bluetooth / network / battery
-                // indicators ahead of these, and step 5 the Claude dial.
+                // Waybar's modules-right order, kept exactly: pulseaudio, bluetooth,
+                // network, battery, then the buttons. Step 5 puts the Claude dial
+                // between the ML4W logo and the clock.
+                VolumeModule {}
+
+                BluetoothModule {}
+
+                NetworkModule {}
+
+                BatteryModule {}
 
                 BarButton {
                     glyph: "dashboard"
