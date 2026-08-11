@@ -50,6 +50,25 @@ IPC targets: `qs ipc show`. The ones this repo owns are `audio`, `bluetooth`, `n
   `hyprland/workspaces` (centre) share the id, so the left module's pill styling lands on
   every window icon in the centre. All of `waybar/style/workspace-taskbar.css` is scoped to
   `.modules-center` for that reason.
+- **Taskbar window tooltips are free, but the title only stays current with a decoy
+  `window-rewrite` rule.** Waybar calls `set_tooltip_text(window_title)` on every window
+  box unconditionally — there is no `tooltip-format` for `workspace-taskbar` and none is
+  needed, hovering an icon already names the window. What *is* conditional is the
+  `windowtitlev2` subscription: `windowRewriteConfigUsesTitle() || m_taskbarWithTitle`,
+  where the second is literally `format.find("{title")`. An icon-only taskbar satisfies
+  neither, so a title that changes while the window sits still is never seen and the
+  tooltip keeps naming whatever was open at the last taskbar rebuild. The unmatchable
+  `title<...>` rule in the module config is there only to flip the first test; waybar
+  confirms it at startup with *"Registering for Hyprland's 'windowtitlev2' events because
+  a user-defined window rewrite rule uses the 'title' field."* The rewrite output itself
+  is unused while the taskbar draws real icons.
+- **On the bar, use `@bar_fg` — `@on_surface` is not always light.** The active
+  `ml4w-modern/colored` variant redefines `@on_surface` to `@on_secondary` (`#22323f`,
+  near-black) because the left workspace pills sit on an opaque light `@background`. Any
+  module drawn *transparent*, straight onto the bar's `rgba(16,20,23,0.6)`, therefore goes
+  dark-on-dark and vanishes — which is exactly how the centre taskbar's workspace numbers
+  became invisible. `@bar_fg` is pinned light in `colors.css` for this case and is what
+  every other bare-glyph module on this bar already uses.
 - **This Waybar build has no `cava`.** It logs `Unknown module` and leaves a gap. Needs a
   rebuild with `-Dcava=enabled`.
 - **Hyprland 0.56 parses dispatch payloads as Lua.** `dispatch focuswindow address:0x…`

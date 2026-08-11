@@ -19,11 +19,29 @@
 //    clickable here; the labels are grouping separators.
 //
 // "on-click-window" defaults to EMPTY - without it, clicking a window icon is a no-op.
+//
+// 3. The window-button TOOLTIP is free but its title can go stale. Waybar sets
+//    `set_tooltip_text(window_title)` on every window box unconditionally, so hovering an
+//    icon names the window with no config at all - which is the only way to tell four
+//    identical KWrite page icons apart. But it only subscribes to Hyprland's
+//    `windowtitlev2` when `windowRewriteConfigUsesTitle() || m_taskbarWithTitle`, and
+//    m_taskbarWithTitle is just `format.find("{title")`. With an icon-only format neither
+//    holds, so a title that changes while the window sits still is never seen and the
+//    tooltip keeps naming the file that was open when the taskbar was last rebuilt. The
+//    never-matching window-rewrite rule below exists purely to make that first test true.
 {
   "hyprland/workspaces": {
     "format": "{name} {windows}",
     "all-outputs": true,
     "active-only": false,
+
+    // Not a rewrite - a subscription switch. See note 3 above: the rule set is scanned at
+    // config-parse time for one that mentions `title`, and finding one is what registers
+    // the module for `windowtitlev2`. The pattern is deliberately unmatchable, and
+    // window-rewrite output is unused anyway while workspace-taskbar draws real icons.
+    "window-rewrite": {
+      "title<^WAYBAR_TITLE_SUBSCRIPTION_ONLY$>": ""
+    },
     "workspace-taskbar": {
       "enable": true,
       "format": "{icon}",

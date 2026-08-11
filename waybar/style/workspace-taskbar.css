@@ -7,6 +7,14 @@
  * #workspaces, so the left module's pill styling -- 2px primary border, 8px radius,
  * opaque background -- lands on every window icon in the centre unless it is scoped
  * back off. Everything here is therefore anchored to .modules-center.
+ *
+ * COLOURS: @bar_fg, never @on_surface. The left module can use @on_surface because it
+ * sits on an opaque @background pill; these buttons are transparent and sit directly
+ * on the bar. The `colored` theme variant redefines @on_surface to @on_secondary
+ * (#22323f, near-black) for the sake of that pill, which on the bar's own
+ * rgba(16,20,23,0.6) is dark-on-dark and the workspace numbers vanish. @bar_fg is
+ * pinned light in colors.css for exactly this case, and is what every other
+ * bare-glyph module on this bar already uses.
  * ----------------------------------------------------- */
 
 /* The workspace button is now a container for window icons, not a pill. Strip the
@@ -18,14 +26,14 @@
     border-radius: 8px;
     padding: 0px 6px;
     margin: 3px 2px;
-    color: @on_surface;
+    color: @bar_fg;
     min-width: 0;
 }
 
 /* A faint plate behind the group is what actually communicates "these windows are on
    this workspace" -- the gap between groups alone is too weak to read at a glance. */
 .modules-center #workspaces button:not(.empty) {
-    background: alpha(@on_surface, 0.06);
+    background: alpha(@bar_fg, 0.06);
 }
 
 /* The focused workspace's group, tinted rather than filled: the window icons inside
@@ -35,13 +43,13 @@
     border: none;
     border-radius: 8px;
     min-width: 0;
-    color: @on_surface;
+    color: @bar_fg;
 }
 
 /* Hovering the group must not look like hovering a window -- keep it subtle, since
    the workspace label itself is not clickable (see the note in modules.json). */
 .modules-center #workspaces button:hover {
-    background: alpha(@on_surface, 0.12);
+    background: alpha(@bar_fg, 0.12);
     border: none;
     border-radius: 8px;
     box-shadow: none;
@@ -50,7 +58,7 @@
 /* The workspace name, sitting to the left of that workspace's icons.
    Class is "workspace-label" -- confirmed against the binary, not guessed. */
 .modules-center #workspaces .workspace-label {
-    color: alpha(@on_surface, 0.55);
+    color: alpha(@bar_fg, 0.75);
     font-size: 11px;
     font-weight: bold;
     margin-right: 4px;
@@ -66,7 +74,7 @@
 }
 
 .modules-center #workspaces .taskbar-window:hover {
-    background: alpha(@on_surface, 0.18);
+    background: alpha(@bar_fg, 0.18);
     box-shadow: none;
 }
 
