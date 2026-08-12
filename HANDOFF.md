@@ -28,9 +28,18 @@ before believing the change is wrong. `~/.config/waybar/launch.sh` reloads Wayba
 | `pulseaudio` | audio panel (sliders, devices, Easy Effects) | `quickshell/AudioApp` |
 | `bluetooth` | BlueZ panel | `quickshell/BluetoothApp` |
 | `network` | NetworkManager panel + connection details + Tailscale | `quickshell/NetworkApp` |
-| `image#claude-usage` | usage panel | `quickshell/ClaudeUsageApp` |
+| usage dial (drawn by hyprbar) | usage panel | `quickshell/ClaudeUsageApp` |
 | `custom/controlcenter` | Control Center | `quickshell/ControlCenterApp` |
 | `clock` | notification centre — clock, calendar, notification list | `quickshell/NotificationCenterApp` |
+
+Plus `quickshell/Panels` — **not an app.** It is the shared look every panel and popout
+draws from, in this repo and in [hyprbar](https://github.com/msfrox/hyprbar): one
+`PanelStyle` singleton holding every dimension, alpha and duration, and the components
+built on it (`PanelCard`, `Section`, `StatRow`, `ToggleRow`, `SliderRow`,
+`ActionButton`, `Glyph`, `FaGlyph`). Read
+[quickshell/Panels/README.md](quickshell/Panels/README.md) before restyling anything.
+It needs one line in `shell.qml` to be importable at all — see
+[docs/quickshell-patches.md](docs/quickshell-patches.md).
 
 Backends in `waybar/scripts/`: `claude-usage.py`, `network-details.py`,
 `system-stats.py`, `easyeffects-status.py`, `brightness.py`, `weather.py`,
