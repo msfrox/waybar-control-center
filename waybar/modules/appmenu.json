@@ -9,8 +9,13 @@
   "custom/appmenu": {
     "format": "apps",
     "on-click": "waybar-app-launcher-toggle",
-    "on-click-middle": "sleep 0.2; rofi -show drun -replace",
-    "on-click-right": "~/.config/hypr/scripts/keybindings.sh",
-    "tooltip-format": "Left: Open the app launcher\nMiddle: Search apps (rofi)\nRight: Show all keybindings"
+    // Middle goes through shehan/bin/launcher.sh rather than bare `walker`: a cold
+    // walker with walker.service down exits 0 without drawing a window, so the
+    // click looks dead. The dispatcher starts elephant + walker first.
+    "on-click-middle": "sleep 0.2; ~/.config/hypr/shehan/bin/launcher.sh walker",
+    // Was ML4W's scripts/keybindings.sh (rofi -dmenu -sep '\0' -eh 2). Now an
+    // elephant menu -- walker's dmenu has no subtext field, but menu entries do.
+    "on-click-right": "walker -m menus:keybinds -p Keybindings",
+    "tooltip-format": "Left: Open the app launcher\nMiddle: Search apps (walker)\nRight: Show all keybindings"
   }
 }
