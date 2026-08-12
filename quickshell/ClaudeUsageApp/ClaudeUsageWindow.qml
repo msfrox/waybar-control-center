@@ -1,7 +1,7 @@
-// Claude Code usage popup for the Waybar `image#claude-usage` module.
+// Claude Code usage popup for the bar's usage dial.
 //
-// The bar module is a dial and a tooltip, which is all a Waybar module can be.
-// This is where the numbers get read properly and where the display options
+// The bar module is a dial and a hover label, which is about as much as it can
+// be. This is where the numbers get read properly and where the display options
 // live - a port of the option set the COSMIC YapCap applet exposes, which is
 // what prompted it.
 //
@@ -133,8 +133,9 @@ PanelWindow {
         }
     }
 
-    // Writing a setting also re-renders the dial and pokes Waybar, so the bar
-    // and this panel never disagree about what is being shown.
+    // The script rewrites the state file, which the bar's dial is already
+    // watching, so the bar and this panel never disagree about what is being
+    // shown - no signal needed.
     Process {
         id: applyProc
         onExited: { root.refreshing = false; root.reload() }
@@ -143,15 +144,14 @@ PanelWindow {
     function apply(pairs) {
         root.refreshing = true
         applyProc.command = ["bash", "-c",
-            root.script + " --set " + pairs.join(" ") + " >/dev/null 2>&1; "
-            + "pkill -RTMIN+8 waybar || true"]
+            root.script + " --set " + pairs.join(" ") + " >/dev/null 2>&1"]
         applyProc.running = true
     }
 
     function refreshNow() {
         root.refreshing = true
         applyProc.command = ["bash", "-c",
-            root.script + " --refresh >/dev/null 2>&1; pkill -RTMIN+8 waybar || true"]
+            root.script + " --refresh >/dev/null 2>&1"]
         applyProc.running = true
     }
 

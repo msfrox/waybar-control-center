@@ -7,53 +7,55 @@ outer ring   7-day window, swept clockwise from 12 o'clock
 inner pie    current 5-hour block, quantised to 10% steps
 ```
 
-## Why a rendered image
+## Why two windows
 
-The previous badge was one quarter-filled circle glyph (`○◔◑◕●`) showing whichever of the
+The original badge was one quarter-filled circle glyph (`○◔◑◕●`) showing whichever of the
 two usage windows happened to be higher. That is close to the least useful summary of
 them: the 5-hour block and the 7-day window move on completely different time scales, and
-the *smaller* one is frequently the one about to matter.
+the *smaller* one is frequently the one about to matter. A dial can carry both, and give
+each its own colour level rather than letting one class colour the whole module.
 
-Waybar's `custom` modules are text-only, and no glyph set expresses two independent
-percentages. Waybar's **`image`** module can render an arbitrary file, and its script
-protocol is:
+## How it fits together
 
 ```
-$path\n$tooltip
+claude-usage.py  →  claude-usage-state.json  →  hyprbar's Quickshell Canvas
+   (fetch)              (the contract)                  (draws the dial)
 ```
 
-There is no class line — which is fine, because the colour is baked into the image, where
-each ring can carry its own level instead of one class colouring the whole module.
+The script is a pure data source: it talks to the usage endpoint, caches the reading, and
+prints the same JSON on stdout so it is usable from a shell. It draws nothing. The dial is
+drawn natively by a `Canvas` in **hyprbar** that reads the state file — so it follows the wallpaper palette, scales with the bar, and redraws without a signal
+round-trip or a PNG on disk.
 
-> [!note] PNG, not SVG
-> Waybar loads images through GdkPixbuf, whose SVG support depends on librsvg's pixbuf
-> loader being installed. A config file cannot assume that. `pycairo` is a hard dependency
-> either way, so the dial is drawn and written as PNG, atomically, so Waybar never reads a
-> half-written file and blanks the module.
-
-The 5-hour fill is rounded to 10% on purpose. The dial is a glanceable indicator and a
-continuously creeping wedge reads as noise; the exact figure is one hover away.
+The 5-hour fill is rounded to 10% in the dial on purpose. The dial is a glanceable
+indicator and a continuously creeping wedge reads as noise; the exact figure is one click
+away in the panel.
 
 ## Files
 
 | Path | Role |
 |---|---|
-| `waybar/scripts/claude-usage.py` | fetch, cache, render, tooltip, settings |
-| `~/.cache/waybar-control-center/claude-usage-state.json` | last good reading |
-| `~/.cache/waybar-control-center/claude-usage.png` | the dial |
+| `waybar/scripts/claude-usage.py` | fetch, cache, settings |
+| `~/.cache/waybar-control-center/claude-usage-state.json` | last good reading — **the contract** |
 | `~/.config/waybar-control-center/claude-usage.json` | settings |
 
-The script owns all four. The Quickshell panel reads the state file and writes settings
+The script owns all three. The Quickshell panel reads the state file and writes settings
 through `claude-usage.py --set key=value` — two processes hand-editing the same JSON would
 be a race for no benefit.
 
+The state file's keys are read by another repo, so they are fixed: `fetched_at`,
+`block_pct`, `week_pct`, `block_resets_at`, `week_resets_at`, `error`, `error_hint`.
+
 ## Refresh
 
-Waybar's `interval` is fixed in the bar config, so honouring a user-set refresh interval
-means polling on a short fixed tick (60s) and only hitting the network once the cached
-reading has aged past the configured interval. A reading that **failed** is retried after
-60s rather than held for the full interval — otherwise one transient 429, or a token
-refresh landing mid-session, freezes the dial for five minutes.
+The bar polls the script on a short fixed tick (60s), so honouring a user-set refresh
+interval has to happen inside the script: it only hits the network once the cached reading
+has aged past the configured interval. A reading that **failed** is retried after 60s
+rather than held for the full interval — otherwise one transient 429, or a token refresh
+landing mid-session, freezes the dial for five minutes.
+
+`--refresh` forces a fetch regardless of age; the panel's refresh button uses it. Because
+the dial watches the state file, rewriting that file is all the notification the bar needs.
 
 ## Panel options
 
@@ -66,6 +68,9 @@ exposes, which is where the idea came from:
 | Reset times | Relative · Absolute |
 | Refresh every | 1m · 5m · 10m · 30m |
 | Dial label | None · Session % |
+
+`show_percent` (Dial label) is written to the settings file but no longer read by the
+script — honouring it is now the drawing side's job, i.e. hyprbar's.
 
 Plus a refresh action and a link to the full `ccusage weekly --breakdown`.
 
@@ -92,15 +97,14 @@ Failures are reported with the fix rather than a status code:
 | 429 | Rate limited by the endpoint. Recovers on its own. |
 | missing credentials | Log in with `claude` once. |
 
-The hint is stored in the state file, not just formatted into the tooltip, so the panel
-shows the same line without duplicating the mapping.
+`error_hint` is stored in the state file alongside the raw `error`, so every reader — the
+dial and the panel — shows the same actionable line without duplicating the mapping.
 
 ## Bar height
 
-The old text badge had the tallest label on the bar, and Waybar measures the bar from its
+The old text badge had the tallest label on the bar, and a bar is measured from its
 tallest child — so that module's `font-size` silently set the whole bar's height, and
-Hyprland's reserved area with it. An image has a fixed box, so that coupling is gone.
-Check with:
+Hyprland's reserved area with it. A fixed-size dial has no such coupling. Check with:
 
 ```bash
 hyprctl monitors -j | python3 -c "import json,sys;print(json.load(sys.stdin)[0]['reserved'])"
