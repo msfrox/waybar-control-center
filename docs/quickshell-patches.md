@@ -57,6 +57,35 @@ import "NotificationCenterApp"
 Every other app in this repo is added to `shell.qml` the same way: one `import "<App>"`
 line and one instantiation inside `ShellRoot`.
 
+---
+
+## `shell.qml` — register the shared panel look
+
+```qml
+import "Panels"
+```
+
+**Nothing is instantiated from it.** The import line exists purely to make the module
+importable, and without it every consumer fails to load with
+
+```
+module "qs.Panels" is not installed
+```
+
+**Why:** a directory under `~/.config/quickshell/` only becomes addressable as
+`qs.<Name>` once something has pulled it in with a *relative* import — and every file
+that wants `qs.Panels` (`BarApp/PowerPopout.qml` in hyprbar, `ControlCenterApp`) lives
+inside a **symlinked** directory, where a bare `qs.Panels` does not resolve on its own.
+`qs.CustomTheme` and `qs.NotificationCenterApp` have always worked from those same
+symlinked directories for exactly this reason: `shell.qml` already imports both
+relatively. This is the same one-line registration, for a module with no window.
+
+Verified by bisection in a throwaway `qs -p` config: `qs.X` resolves from a real
+subdirectory unaided, fails from a symlinked one, and starts working the moment the
+root does `import "X"`.
+
+[Panels/README.md](../quickshell/Panels/README.md) is what the module is.
+
 ML4W's `CalendarApp/` is left on disk untouched. Nothing references it, and deleting it
 would only give the next ML4W update something to restore.
 

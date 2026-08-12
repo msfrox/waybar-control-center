@@ -1,0 +1,204 @@
+pragma Singleton
+
+// THE ONE PLACE EVERY PANEL AND POPOUT GETS ITS LOOK FROM.
+//
+// Before this file the surface language was copied by hand into every window
+// that drew one — ControlCenterWindow, AudioWindow, the bar's PowerPopout,
+// PlayerStack, WindowPreview, the quicklinks drawer — and it had already
+// drifted: the card alpha was 0.30 in the control centre, 0.88 in the power
+// popout, 0.72 in the quicklinks drawer and 0.40 in the player stack, with
+// three different corner radii between them. Each of those numbers had a
+// defensible reason at the time and no single reader could see all of them.
+//
+// So: every dimension, alpha, duration and derived colour that makes a panel
+// look like this desktop's panels lives here, once. Change a value in this file
+// and every consumer moves together. Add a new popout, import `qs.Panels`, and
+// it is already in the family without a design decision being made.
+//
+// THIS IS NOT A PALETTE. Colours still come from `Theme` (Matugen, i.e. the
+// wallpaper) — what lives here is how those colours are USED: which role goes
+// on a card, at what alpha, behind what. Anything that would have to change
+// when the wallpaper changes belongs in Theme; anything that describes the
+// shape of the UI belongs here.
+//
+//     import qs.Panels
+//
+//     PanelCard {
+//         Section { title: "SOMETHING" ; StatRow { ... } }
+//     }
+//
+// The components in this directory are the vocabulary; the tokens below are
+// what they are built from. Reach for a component first — a raw `Rectangle`
+// with `PanelStyle.fillSubtle` on it is fine, but if you write the same one
+// twice it wants to be a component here instead.
+
+import QtQuick
+import Quickshell
+import qs.CustomTheme
+
+QtObject {
+    id: style
+
+    // --- HELPERS ---
+
+    // Qt.alpha() exists but reads badly inline and is easy to mistake for a
+    // multiply. Named so a call site says what it means.
+    function withAlpha(c: color, a: real): color {
+        return Qt.rgba(c.r, c.g, c.b, a)
+    }
+
+    // --- THE CARD ---
+    //
+    // One translucent rectangle with a hairline accent border, sitting on a
+    // fully transparent margin that exists purely so the drop shadow has
+    // somewhere to fall. That transparent margin is load-bearing beyond the
+    // shadow: the Hyprland layer rule that frosts these surfaces
+    // (`quickshell-frosted-glass` in ~/.config/hypr/shehan/theming.lua) carries
+    // `ignore_alpha = 0.2`, which is what stops it blurring a rectangle of
+    // wallpaper around every popup. Keep panelAlpha above that threshold or the
+    // frost silently stops applying.
+
+    readonly property int panelRadius: 10
+    readonly property real panelAlpha: 0.30
+    readonly property color panelColor: style.withAlpha(Theme.background, style.panelAlpha)
+
+    readonly property int panelBorderWidth: 1
+    readonly property real panelBorderAlpha: 0.35
+    readonly property color panelBorderColor: style.withAlpha(Theme.primary, style.panelBorderAlpha)
+
+    // Inside the card: how far the content sits off the border, and how far
+    // apart consecutive blocks sit.
+    readonly property int panelPadding: 20
+    readonly property int panelSpacing: 10
+
+    // Outside the card: the transparent gutter the shadow lives in. A full
+    // panel wants the roomy version; a popout hanging a few pixels off a bar
+    // button wants the tight one, or the gap to the bar reads as a mistake.
+    readonly property int shadowMargin: 20
+    readonly property int popoutShadowMargin: 12
+    readonly property real shadowBlur: 15
+    readonly property color shadowColor: style.withAlpha(Theme.shadow, 0.4)
+
+    // --- BAR SURFACES ---
+    //
+    // Two roles, not one, and the distinction is real rather than a place to
+    // hide the old drift. A PANEL floats: it is its own object, it casts a
+    // shadow, and it is read as sitting in front of the desktop. A BAR SURFACE
+    // is glued to the bar — a hover preview, the quicklinks drawer, the player
+    // picker — and has to read as part of it, which means matching the bar's
+    // own wash rather than a card's.
+    //
+    // `barAlpha` IS the bar's background. `barPlateAlpha` is something drawn on
+    // top of the bar, a little more opaque so it separates from the wash
+    // underneath it instead of compositing into a single murkier layer.
+    //
+    // Radius is BarButton's pill radius deliberately: a plate on the bar that
+    // rounds differently from the pills beside it invents a second shape
+    // language two centimetres from the first.
+    readonly property real barAlpha: 0.60
+    readonly property color barColor: style.withAlpha(Theme.background, style.barAlpha)
+    readonly property real barPlateAlpha: 0.72
+    readonly property color barPlateColor: style.withAlpha(Theme.background, style.barPlateAlpha)
+    readonly property int barRadius: 8
+    readonly property color barBorderColor: style.withAlpha(Theme.primary, 0.30)
+
+    // --- FILLS ---
+    //
+    // The four states every interactive surface on a panel moves between. They
+    // are alphas of on_surface and primary rather than fixed colours so they
+    // stay correct through a wallpaper change.
+
+    // A resting plate: tiles, pills, inactive rows.
+    readonly property color fillSubtle: style.withAlpha(Theme.on_surface, 0.07)
+    // Slightly stronger, for a plate that has to read against another plate.
+    readonly property color fillRaised: style.withAlpha(Theme.on_surface, 0.10)
+    // The unfilled part of any slider or progress track.
+    readonly property color fillTrack: style.withAlpha(Theme.on_surface, 0.20)
+    // Pointer is over it, but it is not on.
+    readonly property color fillHover: style.withAlpha(Theme.primary, 0.18)
+    // On. Solid accent — this is what makes a toggle readable without a label.
+    readonly property color fillActive: Theme.primary
+    // Selected-but-not-pressed rows in a list.
+    readonly property color fillSelected: style.withAlpha(Theme.primary, 0.15)
+
+    // A hairline rule between blocks. Faint primary rather than grey, which is
+    // what keeps a stack of sections from looking like a spreadsheet.
+    readonly property color separatorColor: style.withAlpha(Theme.primary, 0.25)
+    readonly property int separatorHeight: 1
+
+    // --- TEXT ---
+    //
+    // Three roles and nothing else. `textOn` is what goes on top of
+    // `fillActive` and is the one that is easy to get wrong: on this palette
+    // Theme.primary is LIGHT, so light text on an active tile disappears.
+
+    readonly property string fontFamily: Theme.fontFamily
+    readonly property color textPrimary: Theme.on_surface
+    readonly property color textMuted: Theme.outline
+    readonly property color textAccent: Theme.primary
+    readonly property color textOn: Theme.on_primary
+    readonly property color textError: Theme.error
+
+    // A dimmer shade of the primary text, for a value's trailing clause. Not
+    // `textMuted` — outline is a different hue and reads as a different kind of
+    // thing (a caption, not a quieter version of the same sentence).
+    readonly property color textDim: style.withAlpha(Theme.on_surface, 0.6)
+
+    // Sizes. Named by role, because "12" tells the next reader nothing about
+    // whether their new label should be 11 or 12.
+    readonly property int fsHero: 26       // the one big number on a panel
+    readonly property int fsTitle: 16      // a panel's own title
+    readonly property int fsBody: 12       // ordinary rows
+    readonly property int fsCaption: 11    // secondary lines, section headers
+    readonly property int fsSmall: 10      // tile labels, notes under a row
+    readonly property int fsMicro: 9       // the caption under a pill's value
+
+    // Section headers: uppercase, tracked out, muted. Consumers read these
+    // rather than restating the three properties.
+    readonly property int sectionLabelSize: style.fsCaption
+    readonly property real sectionLetterSpacing: 1
+
+    // --- ICONS ---
+    //
+    // Two families, deliberately. Material Icons Round is the panel vocabulary
+    // (it has the UI verbs — settings, chevron_right, expand_more). Font Awesome
+    // is what the BAR uses, and the bar's own popouts keep it so a glyph in a
+    // popout is the same picture as the glyph on the button that opened it.
+    //
+    // FONT AWESOME NEEDS WEIGHT 900. The four glyphs this desktop leans on
+    // (U+F6A9, U+F796, U+F5E7, U+F590) exist only in the Solid-900 face, and
+    // fontconfig fallback resolves the family to Regular-400, which renders
+    // them as tofu. See BarButton.qml in hyprbar for the long version.
+    readonly property string iconFamily: "Material Icons Round"
+    readonly property string faFamily: "Font Awesome 7 Free"
+    readonly property int faWeight: 900
+    readonly property int iconSize: 20
+
+    // --- CONTROLS ---
+
+    readonly property int controlRadius: 8
+    readonly property int chipRadius: 11
+    readonly property int buttonRadius: 7
+    readonly property int buttonHeight: 30
+    readonly property int tileHeight: 56
+    readonly property int pillHeight: 48
+
+    readonly property int trackHeight: 6
+    readonly property int trackRadius: 3
+    readonly property int handleSize: 16
+    // A held handle inverts: accent ring, card-coloured centre. Reads as
+    // "picked up" without needing a size change that would shift the track.
+    readonly property color handlePressed: Theme.background
+
+    readonly property int switchWidth: 34
+    readonly property int switchHeight: 18
+    readonly property int switchKnob: 14
+
+    // --- MOTION ---
+    //
+    // Three speeds. Anything slower than `slow` on a panel that opens and
+    // closes as often as these do is felt as lag rather than seen as polish.
+    readonly property int animFast: 120     // hover recolours
+    readonly property int animNormal: 160   // state changes, switches
+    readonly property int animSlow: 260     // a value physically moving
+}

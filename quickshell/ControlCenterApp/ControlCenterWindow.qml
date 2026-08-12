@@ -29,6 +29,18 @@ import QtQuick.Controls
 import QtQuick.Effects
 import qs.CustomTheme
 import qs.NotificationCenterApp
+// The shared panel look. This window is where that look was FIRST worked out,
+// so nothing here changes shape by adopting it — but the numbers now live in
+// one file (quickshell/Panels/PanelStyle.qml) instead of being copied into
+// every other panel and popout by hand, which is how they had already drifted.
+//
+// The inline `Glyph` and `Section` components below shadow the imported types
+// of the same name: QML resolves inline components in the document ahead of
+// anything an import brings in. They stay local because both carry
+// control-centre-only behaviour (persisted collapse state, hide-a-section) that
+// does not belong in the shared set. Migrating them is follow-up work, not a
+// prerequisite — the tokens are the part that has to be shared.
+import qs.Panels
 
 PanelWindow {
     id: root
@@ -228,6 +240,15 @@ PanelWindow {
     // same cadence the bar module used.
     property int updateCount: 0
 
+    // Counting and installing come from different places on purpose. The count
+    // stays on ML4W's check script so the bar, the app launcher and this tile
+    // cannot disagree about the number. Installing does not: ML4W's
+    // installupdates.sh opens a terminal on a script whose first command is
+    // `figlet`, and neither figlet nor the `gum` it prompts with is installed
+    // here, so the window appeared and died before asking anything. `arch-update`
+    // is interactive, so it still needs a terminal of its own.
+    readonly property string updateCommand: "kitty --class dotfiles-floating -e arch-update"
+
     Process {
         id: updatesProc
         command: [Quickshell.env("HOME") + "/.config/ml4w/scripts/ml4w-check-system-updates"]
@@ -414,9 +435,9 @@ PanelWindow {
 
     // --- SHARED PIECES ---
     component Glyph: Text {
-        font.family: "Material Icons Round"
-        font.pixelSize: 20
-        color: Theme.primary
+        font.family: PanelStyle.iconFamily
+        font.pixelSize: PanelStyle.iconSize
+        color: PanelStyle.textAccent
         verticalAlignment: Text.AlignVCenter
         horizontalAlignment: Text.AlignHCenter
     }
@@ -462,7 +483,7 @@ PanelWindow {
                 Text {
                     Layout.fillWidth: true
                     text: section.title
-                    font.family: Theme.fontFamily
+                    font.family: PanelStyle.fontFamily
                     font.pixelSize: 11
                     font.capitalization: Font.AllUppercase
                     font.letterSpacing: 1
@@ -518,14 +539,14 @@ PanelWindow {
             Text {
                 Layout.fillWidth: true
                 text: statRoot.label
-                font.family: Theme.fontFamily
+                font.family: PanelStyle.fontFamily
                 font.pixelSize: 12
                 color: Theme.on_surface
             }
 
             Text {
                 text: statRoot.detail
-                font.family: Theme.fontFamily
+                font.family: PanelStyle.fontFamily
                 font.pixelSize: 10
                 color: Theme.outline
                 rightPadding: 8
@@ -533,7 +554,7 @@ PanelWindow {
 
             Text {
                 text: Math.round(statRoot.percent) + "%"
-                font.family: Theme.fontFamily
+                font.family: PanelStyle.fontFamily
                 font.pixelSize: 12
                 font.bold: true
                 color: root.loadColor(statRoot.percent)
@@ -544,7 +565,7 @@ PanelWindow {
             Layout.fillWidth: true
             implicitHeight: 6
             radius: 3
-            color: Qt.rgba(Theme.on_surface.r, Theme.on_surface.g, Theme.on_surface.b, 0.2)
+            color: PanelStyle.fillTrack
 
             Rectangle {
                 width: parent.width * Math.min(1, Math.max(0, statRoot.percent / 100))
@@ -582,8 +603,8 @@ PanelWindow {
         radius: 8
         color: active ? Theme.primary
                       : tileMouse.containsMouse
-                        ? Qt.rgba(Theme.primary.r, Theme.primary.g, Theme.primary.b, 0.18)
-                        : Qt.rgba(Theme.on_surface.r, Theme.on_surface.g, Theme.on_surface.b, 0.07)
+                        ? PanelStyle.fillHover
+                        : PanelStyle.fillSubtle
         Behavior on color { ColorAnimation { duration: 150 } }
         clip: true
 
@@ -601,7 +622,7 @@ PanelWindow {
             Text {
                 Layout.alignment: Qt.AlignHCenter
                 text: tile.detail !== "" ? tile.detail : tile.label
-                font.family: Theme.fontFamily
+                font.family: PanelStyle.fontFamily
                 font.pixelSize: 10
                 color: tile.active ? Theme.on_primary : Theme.on_surface
             }
@@ -672,7 +693,7 @@ PanelWindow {
                 width: brightSlider.availableWidth
                 height: implicitHeight
                 radius: 3
-                color: Qt.rgba(Theme.on_surface.r, Theme.on_surface.g, Theme.on_surface.b, 0.2)
+                color: PanelStyle.fillTrack
 
                 Rectangle {
                     width: brightSlider.visualPosition * parent.width
@@ -700,7 +721,7 @@ PanelWindow {
             // the slider started on for the whole drag - most visibly on the external
             // monitor, whose reading is never refreshed while the panel is up at all.
             text: Math.round(brightSlider.value) + "%"
-            font.family: Theme.fontFamily
+            font.family: PanelStyle.fontFamily
             font.pixelSize: 12
             color: Theme.on_surface
             horizontalAlignment: Text.AlignRight
@@ -717,7 +738,7 @@ PanelWindow {
         Layout.fillWidth: true
         implicitHeight: 48
         radius: 8
-        color: Qt.rgba(Theme.on_surface.r, Theme.on_surface.g, Theme.on_surface.b, 0.07)
+        color: PanelStyle.fillSubtle
         clip: true
 
         ColumnLayout {
@@ -732,7 +753,7 @@ PanelWindow {
 
                 Text {
                     text: pill.value
-                    font.family: Theme.fontFamily
+                    font.family: PanelStyle.fontFamily
                     font.pixelSize: 13
                     font.bold: true
                     color: Theme.on_surface
@@ -742,7 +763,7 @@ PanelWindow {
             Text {
                 Layout.alignment: Qt.AlignHCenter
                 text: pill.caption
-                font.family: Theme.fontFamily
+                font.family: PanelStyle.fontFamily
                 font.pixelSize: 9
                 color: Theme.outline
             }
@@ -765,10 +786,10 @@ PanelWindow {
         radius: 11
         color: chip.active ? Theme.primary
                             : chipMouse.containsMouse
-                              ? Qt.rgba(Theme.primary.r, Theme.primary.g, Theme.primary.b, 0.18)
-                              : Qt.rgba(Theme.on_surface.r, Theme.on_surface.g, Theme.on_surface.b, 0.07)
+                              ? PanelStyle.fillHover
+                              : PanelStyle.fillSubtle
         border.width: chip.active ? 0 : 1
-        border.color: Qt.rgba(Theme.outline.r, Theme.outline.g, Theme.outline.b, 0.4)
+        border.color: PanelStyle.withAlpha(PanelStyle.textMuted, 0.4)
         Behavior on color { ColorAnimation { duration: 150 } }
 
         Text {
@@ -778,7 +799,7 @@ PanelWindow {
             verticalAlignment: Text.AlignVCenter
             horizontalAlignment: Text.AlignHCenter
             text: chip.label
-            font.family: Theme.fontFamily
+            font.family: PanelStyle.fontFamily
             font.pixelSize: 10
             color: chip.active ? Theme.on_primary : Theme.on_surface
             elide: Text.ElideRight
@@ -798,13 +819,13 @@ PanelWindow {
     // ==========================================
     Item {
         anchors.fill: parent
-        anchors.margins: 20
+        anchors.margins: PanelStyle.shadowMargin
 
         RectangularShadow {
             anchors.fill: mainBgRect
             radius: mainBgRect.radius
-            blur: 15
-            color: Qt.rgba(Theme.shadow.r, Theme.shadow.g, Theme.shadow.b, 0.4)
+            blur: PanelStyle.shadowBlur
+            color: PanelStyle.shadowColor
         }
 
         // One rectangle: translucent fill, solid hairline border. A gradient
@@ -816,16 +837,16 @@ PanelWindow {
         Rectangle {
             id: mainBgRect
             anchors.fill: parent
-            radius: 10
-            color: Qt.rgba(Theme.background.r, Theme.background.g, Theme.background.b, 0.30)
-            border.width: 1
-            border.color: Qt.rgba(Theme.primary.r, Theme.primary.g, Theme.primary.b, 0.35)
+            radius: PanelStyle.panelRadius
+            color: PanelStyle.panelColor
+            border.width: PanelStyle.panelBorderWidth
+            border.color: PanelStyle.panelBorderColor
         }
 
         ColumnLayout {
             anchors.fill: parent
-            anchors.margins: 20
-            spacing: 10
+            anchors.margins: PanelStyle.panelPadding
+            spacing: PanelStyle.panelSpacing
 
             // --- HEADER ---
             RowLayout {
@@ -837,7 +858,7 @@ PanelWindow {
 
                     Text {
                         text: Qt.formatDateTime(clock.now, "dddd")
-                        font.family: Theme.fontFamily
+                        font.family: PanelStyle.fontFamily
                         font.pixelSize: 16
                         font.bold: true
                         color: Theme.primary
@@ -845,7 +866,7 @@ PanelWindow {
 
                     Text {
                         text: Qt.formatDateTime(clock.now, "d MMMM yyyy  ·  HH:mm")
-                        font.family: Theme.fontFamily
+                        font.family: PanelStyle.fontFamily
                         font.pixelSize: 11
                         color: Theme.outline
                     }
@@ -915,7 +936,7 @@ PanelWindow {
 
                         Text {
                             text: root.weather.temp ? root.weather.temp + "°" : ""
-                            font.family: Theme.fontFamily
+                            font.family: PanelStyle.fontFamily
                             font.pixelSize: 13
                             font.bold: true
                             color: root.weather.error ? Theme.outline : Theme.on_surface
@@ -1109,7 +1130,7 @@ PanelWindow {
                             Layout.fillWidth: true
                             visible: !root.brightness.internal && !root.brightness.external
                             text: "No controllable displays found"
-                            font.family: Theme.fontFamily
+                            font.family: PanelStyle.fontFamily
                             font.pixelSize: 11
                             color: Theme.outline
                         }
@@ -1350,7 +1371,7 @@ PanelWindow {
                             Layout.fillWidth: true
                             visible: !mediaSection.player
                             text: "Nothing playing"
-                            font.family: Theme.fontFamily
+                            font.family: PanelStyle.fontFamily
                             font.pixelSize: 11
                             color: Theme.outline
                         }
@@ -1365,7 +1386,7 @@ PanelWindow {
                                 implicitHeight: 56
                                 radius: 8
                                 color: trackMouse.containsMouse
-                                       ? Qt.rgba(Theme.primary.r, Theme.primary.g, Theme.primary.b, 0.15)
+                                       ? PanelStyle.fillSelected
                                        : "transparent"
 
                                 RowLayout {
@@ -1395,7 +1416,7 @@ PanelWindow {
                                         Text {
                                             Layout.fillWidth: true
                                             text: mediaSection.player ? mediaSection.player.trackTitle : ""
-                                            font.family: Theme.fontFamily
+                                            font.family: PanelStyle.fontFamily
                                             font.pixelSize: 12
                                             font.bold: true
                                             color: Theme.on_surface
@@ -1406,7 +1427,7 @@ PanelWindow {
                                             Layout.fillWidth: true
                                             visible: !!(mediaSection.player && mediaSection.player.trackArtist)
                                             text: mediaSection.player ? mediaSection.player.trackArtist : ""
-                                            font.family: Theme.fontFamily
+                                            font.family: PanelStyle.fontFamily
                                             font.pixelSize: 11
                                             color: Theme.outline
                                             elide: Text.ElideRight
@@ -1432,7 +1453,7 @@ PanelWindow {
                                             && mediaSection.player.length > 0)
                                 implicitHeight: 3
                                 radius: 1.5
-                                color: Qt.rgba(Theme.on_surface.r, Theme.on_surface.g, Theme.on_surface.b, 0.2)
+                                color: PanelStyle.fillTrack
 
                                 Rectangle {
                                     width: parent.width * mediaSection.progressFraction
@@ -1518,8 +1539,8 @@ PanelWindow {
                             implicitHeight: 44
                             radius: 8
                             color: notifMouse.containsMouse
-                                   ? Qt.rgba(Theme.primary.r, Theme.primary.g, Theme.primary.b, 0.15)
-                                   : Qt.rgba(Theme.on_surface.r, Theme.on_surface.g, Theme.on_surface.b, 0.07)
+                                   ? PanelStyle.fillSelected
+                                   : PanelStyle.fillSubtle
 
                             ToolTip.visible: notifMouse.containsMouse
                             ToolTip.text: "Open the notification panel"
@@ -1550,7 +1571,7 @@ PanelWindow {
                                         return n + " notification" + (n === 1 ? "" : "s")
                                                + (NotificationState.dnd ? " · DND on" : "")
                                     }
-                                    font.family: Theme.fontFamily
+                                    font.family: PanelStyle.fontFamily
                                     font.pixelSize: 12
                                     color: Theme.on_surface
                                 }
@@ -1581,8 +1602,8 @@ PanelWindow {
                             implicitHeight: 44
                             radius: 8
                             color: updatesMouse.containsMouse
-                                   ? Qt.rgba(Theme.primary.r, Theme.primary.g, Theme.primary.b, 0.15)
-                                   : Qt.rgba(Theme.on_surface.r, Theme.on_surface.g, Theme.on_surface.b, 0.07)
+                                   ? PanelStyle.fillSelected
+                                   : PanelStyle.fillSubtle
 
                             ToolTip.visible: updatesMouse.containsMouse && root.updateCount > 0
                             ToolTip.text: "Install pending package updates"
@@ -1606,7 +1627,7 @@ PanelWindow {
                                           ? root.updateCount + " package" + (root.updateCount === 1 ? "" : "s")
                                             + " to update"
                                           : "System is up to date"
-                                    font.family: Theme.fontFamily
+                                    font.family: PanelStyle.fontFamily
                                     font.pixelSize: 12
                                     color: Theme.on_surface
                                 }
@@ -1625,8 +1646,7 @@ PanelWindow {
                                 hoverEnabled: true
                                 cursorShape: Qt.PointingHandCursor
                                 enabled: root.updateCount > 0
-                                onClicked: root.launch(
-                                    Quickshell.env("HOME") + "/.config/ml4w/settings/installupdates.sh")
+                                onClicked: root.launch(root.updateCommand)
                             }
                         }
 
@@ -1641,7 +1661,7 @@ PanelWindow {
                             Layout.fillWidth: true
                             visible: SystemTray.items.values.length === 0
                             text: "Nothing in the tray"
-                            font.family: Theme.fontFamily
+                            font.family: PanelStyle.fontFamily
                             font.pixelSize: 11
                             color: Theme.outline
                         }
@@ -1704,7 +1724,7 @@ PanelWindow {
                                             text: trayRow.modelData.tooltipTitle
                                                   || trayRow.modelData.title
                                                   || trayRow.modelData.id
-                                            font.family: Theme.fontFamily
+                                            font.family: PanelStyle.fontFamily
                                             font.pixelSize: 12
                                             color: Theme.on_surface
                                             elide: Text.ElideRight
@@ -1810,7 +1830,7 @@ PanelWindow {
                                                 Text {
                                                     Layout.fillWidth: true
                                                     text: entryRow.modelData.text
-                                                    font.family: Theme.fontFamily
+                                                    font.family: PanelStyle.fontFamily
                                                     font.pixelSize: 12
                                                     color: Theme.on_surface
                                                     opacity: entryRow.modelData.enabled ? 1 : 0.4
