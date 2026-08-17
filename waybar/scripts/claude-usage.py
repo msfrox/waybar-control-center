@@ -3,7 +3,7 @@
 
 This script does one job: keep
 
-    ~/.cache/waybar-control-center/claude-usage-state.json
+    ~/.cache/hyprbar/claude-usage-state.json
 
 current, holding the two usage windows that matter - the 5-hour block and the
 7-day window, which move on completely different time scales - along with their
@@ -34,8 +34,8 @@ import urllib.request
 HOME = os.path.expanduser("~")
 CRED = os.path.join(os.environ.get("CLAUDE_CONFIG_DIR", os.path.join(HOME, ".claude")),
                     ".credentials.json")
-SETTINGS = os.path.join(HOME, ".config/waybar-control-center/claude-usage.json")
-CACHE_DIR = os.path.join(HOME, ".cache/waybar-control-center")
+SETTINGS = os.path.join(HOME, ".config/hyprbar/claude-usage.json")
+CACHE_DIR = os.path.join(HOME, ".cache/hyprbar")
 STATE = os.path.join(CACHE_DIR, "claude-usage-state.json")
 
 UA = "claude-code/2.0.0 (external, cli)"

@@ -394,7 +394,7 @@ PanelWindow {
 
     FileView {
         id: settingsFile
-        path: Quickshell.env("HOME") + "/.config/waybar-control-center/control-center.json"
+        path: Quickshell.env("HOME") + "/.config/hyprbar/control-center.json"
         watchChanges: true
         onFileChanged: reload()
         onLoaded: {

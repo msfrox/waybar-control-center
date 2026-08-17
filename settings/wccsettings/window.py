@@ -102,7 +102,7 @@ class SettingsWindow(Adw.ApplicationWindow):
 
         group = Adw.PreferencesGroup(
             title=page.title,
-            description=page.note or f"Written to ~/.config/waybar-control-center/{page.filename}",
+            description=page.note or f"Written to ~/.config/hyprbar/{page.filename}",
         )
         prefs.add(group)
 

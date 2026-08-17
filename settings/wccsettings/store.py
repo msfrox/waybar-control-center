@@ -8,7 +8,7 @@ everything keeps working exactly as it does now.
 
 Two flavours of file, and the difference matters:
 
-- **Ours** (`~/.config/waybar-control-center/*.json`) — strict JSON, written by
+- **Ours** (`~/.config/hyprbar/*.json`) — strict JSON, written by
   this project, safe to re-serialise wholesale.
 - **Waybar's** (`~/.config/waybar/modules.json`) — JSONC: `//` comments and
   trailing commas, and owned by ML4W. Re-serialising it would silently delete
@@ -27,11 +27,11 @@ from typing import Any
 
 CONFIG_DIR = Path(
     os.environ.get("XDG_CONFIG_HOME", Path.home() / ".config")
-) / "waybar-control-center"
+) / "hyprbar"
 
 CACHE_DIR = Path(
     os.environ.get("XDG_CACHE_HOME", Path.home() / ".cache")
-) / "waybar-control-center"
+) / "hyprbar"
 
 WAYBAR_DIR = Path(
     os.environ.get("XDG_CONFIG_HOME", Path.home() / ".config")

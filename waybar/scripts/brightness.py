@@ -29,7 +29,7 @@ import shutil
 import subprocess
 import sys
 
-CACHE_DIR = os.path.expanduser("~/.cache/waybar-control-center")
+CACHE_DIR = os.path.expanduser("~/.cache/hyprbar")
 BUS_CACHE = os.path.join(CACHE_DIR, "ddc-bus.json")
 VCP_BRIGHTNESS = "10"
 

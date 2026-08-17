@@ -21,7 +21,7 @@ import os
 import shutil
 import time
 
-CACHE_DIR = os.path.expanduser("~/.cache/waybar-control-center")
+CACHE_DIR = os.path.expanduser("~/.cache/hyprbar")
 NET_CACHE = os.path.join(CACHE_DIR, "system-stats-net.json")
 CPU_SAMPLE_SECONDS = 0.2
 

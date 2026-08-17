@@ -203,7 +203,7 @@ Singleton {
 
     FileView {
         id: historyFile
-        path: Quickshell.env("HOME") + "/.cache/waybar-control-center/notification-history.json"
+        path: Quickshell.env("HOME") + "/.cache/hyprbar/notification-history.json"
         // Write to a temp file and rename, so a poweroff mid-write leaves the
         // previous history intact rather than a truncated file.
         atomicWrites: true
@@ -233,7 +233,7 @@ Singleton {
     // into a file the settings app treats as user intent.
     FileView {
         id: settingsFile
-        path: Quickshell.env("HOME") + "/.config/waybar-control-center/notifications.json"
+        path: Quickshell.env("HOME") + "/.config/hyprbar/notifications.json"
         watchChanges: true
         onFileChanged: reload()
         onLoaded: root.dnd = settings.dnd

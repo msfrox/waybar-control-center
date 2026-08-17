@@ -7,9 +7,9 @@
 //
 // It owns no data of its own. claude-usage.py is the single thing that talks to
 // the usage endpoint; it caches its reading to
-//   ~/.cache/waybar-control-center/claude-usage-state.json
+//   ~/.cache/hyprbar/claude-usage-state.json
 // which this reads, and it owns the settings file
-//   ~/.config/waybar-control-center/claude-usage.json
+//   ~/.config/hyprbar/claude-usage.json
 // which this writes through `claude-usage.py --set key=value`. Two processes
 // hand-editing the same JSON would be a race for no benefit.
 //
@@ -83,8 +83,8 @@ PanelWindow {
 
     // --- DATA ---
     readonly property string script: Quickshell.env("HOME") + "/.config/brilliant/providers/claude-usage.py"
-    readonly property string statePath: Quickshell.env("HOME") + "/.cache/waybar-control-center/claude-usage-state.json"
-    readonly property string settingsPath: Quickshell.env("HOME") + "/.config/waybar-control-center/claude-usage.json"
+    readonly property string statePath: Quickshell.env("HOME") + "/.cache/hyprbar/claude-usage-state.json"
+    readonly property string settingsPath: Quickshell.env("HOME") + "/.config/hyprbar/claude-usage.json"
 
     property var state: ({})
     property var settings: ({

@@ -18,7 +18,7 @@ those calls are served from the cache without touching the network.
 
 **Location is geo-IP by default**, which is coarse — it resolves to whichever exchange
 the ISP hands out, and lands on the VPN exit entirely whenever Tailscale is routing. To
-pin it, set `weather_location` in ~/.config/waybar-control-center/control-center.json;
+pin it, set `weather_location` in ~/.config/hyprbar/control-center.json;
 that is the file the panel already owns, so the Settings app can edit it and there is
 nothing to restart. WEATHER_LOCATION in the environment overrides the file, and
 DEFAULT_LOCATION below is the last fallback. wttr.in takes a city name ("Colombo"),
@@ -36,10 +36,10 @@ import sys
 import time
 import urllib.parse
 
-CACHE_DIR = os.path.expanduser("~/.cache/waybar-control-center")
+CACHE_DIR = os.path.expanduser("~/.cache/hyprbar")
 CACHE = os.path.join(CACHE_DIR, "weather.json")
 SETTINGS = os.path.expanduser(
-    "~/.config/waybar-control-center/control-center.json")
+    "~/.config/hyprbar/control-center.json")
 TTL = 1800  # seconds; matches the old bar module's interval
 DEFAULT_LOCATION = ""  # "" = wttr.in geo-IP guess
 
