@@ -80,7 +80,7 @@ PanelWindow {
 
     Process {
         id: effectsProc
-        command: [Quickshell.env("HOME") + "/.config/waybar/scripts/easyeffects-status.py"]
+        command: [Quickshell.env("HOME") + "/.config/brilliant/providers/easyeffects-status.py"]
         stdout: StdioCollector {
             onStreamFinished: {
                 try { root.effects = JSON.parse(this.text) } catch (e) { root.effects = {} }

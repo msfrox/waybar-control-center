@@ -125,7 +125,7 @@ PanelWindow {
 
     Process {
         id: statsProc
-        command: [Quickshell.env("HOME") + "/.config/waybar/scripts/system-stats.py"]
+        command: [Quickshell.env("HOME") + "/.config/brilliant/providers/system-stats.py"]
         stdout: StdioCollector {
             onStreamFinished: {
                 try { root.stats = JSON.parse(this.text) } catch (e) {}
@@ -162,7 +162,7 @@ PanelWindow {
 
     Process {
         id: brightnessProc
-        command: [Quickshell.env("HOME") + "/.config/waybar/scripts/brightness.py", "get"]
+        command: [Quickshell.env("HOME") + "/.config/brilliant/providers/brightness.py", "get"]
         stdout: StdioCollector {
             onStreamFinished: {
                 try { root.brightness = JSON.parse(this.text) } catch (e) {}
@@ -183,7 +183,7 @@ PanelWindow {
 
     Process {
         id: weatherProc
-        command: [Quickshell.env("HOME") + "/.config/waybar/scripts/weather.py"]
+        command: [Quickshell.env("HOME") + "/.config/brilliant/providers/weather.py"]
         stdout: StdioCollector {
             onStreamFinished: {
                 try { root.weather = JSON.parse(this.text) } catch (e) {}
@@ -193,7 +193,7 @@ PanelWindow {
 
     Process {
         id: weatherRefreshProc
-        command: [Quickshell.env("HOME") + "/.config/waybar/scripts/weather.py",
+        command: [Quickshell.env("HOME") + "/.config/brilliant/providers/weather.py",
                   "--refresh"]
         stdout: StdioCollector {
             onStreamFinished: {
@@ -222,7 +222,7 @@ PanelWindow {
         property int value: 0
         onTriggered: {
             brightnessSet.command = [
-                Quickshell.env("HOME") + "/.config/waybar/scripts/brightness.py",
+                Quickshell.env("HOME") + "/.config/brilliant/providers/brightness.py",
                 "set", target, String(value)]
             brightnessSet.running = true
         }

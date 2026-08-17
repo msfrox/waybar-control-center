@@ -95,7 +95,7 @@ PanelWindow {
 
     Process {
         id: detailsProc
-        command: [Quickshell.env("HOME") + "/.config/waybar/scripts/network-details.py"]
+        command: [Quickshell.env("HOME") + "/.config/brilliant/providers/network-details.py"]
         stdout: StdioCollector {
             onStreamFinished: {
                 try {

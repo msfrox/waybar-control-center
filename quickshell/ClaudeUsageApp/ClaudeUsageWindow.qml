@@ -82,7 +82,7 @@ PanelWindow {
     }
 
     // --- DATA ---
-    readonly property string script: Quickshell.env("HOME") + "/.config/waybar/scripts/claude-usage.py"
+    readonly property string script: Quickshell.env("HOME") + "/.config/brilliant/providers/claude-usage.py"
     readonly property string statePath: Quickshell.env("HOME") + "/.cache/waybar-control-center/claude-usage-state.json"
     readonly property string settingsPath: Quickshell.env("HOME") + "/.config/waybar-control-center/claude-usage.json"
 
