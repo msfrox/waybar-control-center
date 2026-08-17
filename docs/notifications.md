@@ -30,7 +30,7 @@ thing one card.
 |---|---|
 | `NotificationState.qml` | the `NotificationServer`, the DND flag, arrival times, toast list, and the persisted history. A singleton because the toasts have to keep firing while the panel is closed and unmapped. |
 | `NotificationCenterWindow.qml` | the bottom-right panel: clock, calendar, list. IPC target `notifications`. |
-| `NotificationToasts.qml` | the top-right popups that replace the ones swaync drew. |
+| `NotificationToasts.qml` | the bottom-right popups that replace the ones swaync drew. |
 | `NotificationEntry.qml` | one notification, shared by the panel list and the toasts. |
 
 The Control Center's Notifications section and its DND quick action read the same
@@ -133,3 +133,15 @@ mask came off — check `systemctl --user is-enabled swaync.service`, and re-run
   Rounded* is not installed, and a missing family fails the same silent way.
 - **`highlighted` is FINAL on `Button`.** Shadowing it with a custom property does not warn,
   it fails to load the entire Quickshell config.
+- **A `Repeater`/`ListView` bound straight to `NotificationState.toasts` cannot animate
+  add or remove.** `toasts` is a `list<var>` reassigned WHOLESALE on every arrival and
+  drop (`root.toasts = [...root.toasts, n]` / `.filter(...)`) — a new array each time,
+  with no way for the view to tell "one item was appended" from "everything changed", so
+  it tore down and rebuilt every delegate on every single notification. Existing toasts
+  replayed their slide-in and a dismissed one just vanished; several arriving close
+  together read as the whole stack flickering. Fixed by keeping a local `ListModel` in
+  `NotificationToasts.qml`, diffed against `toasts` on every change (`append`/`insert`/
+  `remove`, matched by `notification.id`) rather than reassigned — `ListModel` mutations
+  fire real per-row signals, which is what `ListView`'s `add`/`remove`/`displaced`
+  transitions need to exist at all. Did not change what the singleton stores; `toasts`
+  has exactly one consumer.
