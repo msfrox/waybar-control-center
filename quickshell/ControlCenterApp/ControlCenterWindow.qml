@@ -1268,7 +1268,7 @@ PanelWindow {
                                 onTriggered: {
                                     root.isOpen = false
                                     Quickshell.execDetached(
-                                        ["bash", "-c", Quickshell.env("HOME") + "/.config/ml4w/settings/hyprpicker.sh"])
+                                        ["bash", "-c", "brilliant-setting run apps.colorpicker"])
                                 }
                             }
 

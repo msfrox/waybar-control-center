@@ -20,6 +20,6 @@
     "format": "{}",
     "interval": 30,
     "on-click": "qs ipc call bluetooth toggle",
-    "on-click-right": "sleep 0.1 && ~/.config/ml4w/settings/bluetooth.sh"
+    "on-click-right": "sleep 0.1 && brilliant-setting run apps.bluetooth"
   }
 }
