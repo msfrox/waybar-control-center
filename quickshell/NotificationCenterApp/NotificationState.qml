@@ -143,6 +143,18 @@ Singleton {
             notification.tracked = true
             root.arrivals[notification.id] = Date.now()
 
+            // A notification can close for reasons this shell never asked for
+            // - the sending app withdrawing or replacing it over
+            // CloseNotification is common (zapzap does it on every new
+            // message). The server destroys the underlying object right
+            // after emitting this, and `toasts` is a plain array kept by
+            // hand, so without this a toast for a notification closed that
+            // way is left holding a dangling reference: every read of it
+            // throws, dismiss() throws before it reaches dropToast(), and
+            // the toast is stuck on screen until clearAll() wipes the array
+            // wholesale instead of reading through it.
+            notification.closed.connect(() => root.dropToast(notification))
+
             if (root.dnd) {
                 if (notification.transient) notification.dismiss()
                 return
