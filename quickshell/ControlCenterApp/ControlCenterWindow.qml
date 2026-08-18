@@ -1224,7 +1224,7 @@ PanelWindow {
                                 hint: "Toggle the warm screen shader (hyprsunset)"
                                 onTriggered: root.toggleAction(
                                     "sleep 0.3; " + Quickshell.env("HOME")
-                                    + "/.config/ml4w/scripts/ml4w-toggle-hyprsunset")
+                                    + "/.config/hypr/shehan/bin/hyprsunset-toggle.sh")
                             }
 
                             ToolTile {
