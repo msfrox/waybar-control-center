@@ -241,8 +241,10 @@ PanelWindow {
     property int updateCount: 0
 
     // Counting and installing come from different places on purpose. The count
-    // stays on ML4W's check script so the bar, the app launcher and this tile
-    // cannot disagree about the number. Installing does not: ML4W's
+    // stays on one shared script so the bar, the app launcher and this tile
+    // cannot disagree about the number -- that script was ML4W's and was rescued
+    // to `brilliant-check-updates` on 2026-08-19, keeping the single-source
+    // property intact. Installing does not share: ML4W's
     // installupdates.sh opens a terminal on a script whose first command is
     // `figlet`, and neither figlet nor the `gum` it prompts with is installed
     // here, so the window appeared and died before asking anything. `arch-update`
@@ -251,7 +253,10 @@ PanelWindow {
 
     Process {
         id: updatesProc
-        command: [Quickshell.env("HOME") + "/.config/ml4w/scripts/ml4w-check-system-updates"]
+        // Used to shell out to ml4w-check-system-updates under the ML4W tree;
+        // that tree is being deleted, so this now calls the rescued copy that
+        // lives on $PATH under its own name.
+        command: [Quickshell.env("HOME") + "/.local/bin/brilliant-check-updates"]
         stdout: StdioCollector {
             onStreamFinished: {
                 try {
@@ -978,7 +983,10 @@ PanelWindow {
                         cursorShape: Qt.PointingHandCursor
                         onClicked: {
                             root.isOpen = false
-                            Quickshell.execDetached(["qs", "ipc", "call", "power", "toggle"])
+                            // The "power" IPC target was served by ML4W's PowerApp,
+                            // which is being deleted; hyprbar now exposes the same
+                            // menu under "powermenu".
+                            Quickshell.execDetached(["qs", "ipc", "call", "powermenu", "toggle"])
                         }
                     }
                 }
@@ -1202,8 +1210,10 @@ PanelWindow {
                                 glyph: "content_paste"
                                 label: "Clipboard"
                                 hint: "Clipboard history (cliphist)"
+                                // Used to be ML4W's ml4w-cliphist, gone with that tree.
+                                // Ours is the walker-picker-over-cliphist replacement.
                                 onTriggered: root.launch(
-                                    Quickshell.env("HOME") + "/.config/ml4w/scripts/ml4w-cliphist")
+                                    Quickshell.env("HOME") + "/.config/hypr/shehan/bin/cliphist.sh")
                             }
 
                             ToolTile {
@@ -1256,8 +1266,10 @@ PanelWindow {
                                 label: "Theme"
                                 detail: "Theme"
                                 hint: "Switch between the light and dark theme"
+                                // Used to be ML4W's ml4w-toggle-theme, which dies with that
+                                // tree; the rescued copy lives on $PATH under its own name.
                                 onTriggered: Quickshell.execDetached(
-                                    ["bash", "-c", Quickshell.env("HOME") + "/.config/ml4w/scripts/ml4w-toggle-theme"])
+                                    ["bash", "-c", Quickshell.env("HOME") + "/.local/bin/brilliant-toggle-theme"])
                             }
 
                             ToolTile {
@@ -1282,6 +1294,37 @@ PanelWindow {
                                     Quickshell.execDetached(
                                         ["bash", "-c", Quickshell.env("HOME") + "/.config/hypr/scripts/screenshot.sh"])
                                 }
+                            }
+
+                            ToolTile {
+                                glyph: "wallpaper"
+                                label: "Wallpaper"
+                                detail: "Set"
+                                hint: "Choose a wallpaper and re-theme the desktop"
+                                onTriggered: {
+                                    root.isOpen = false
+                                    Quickshell.execDetached(["bash", "-c", "brilliant-wallpaper-app"])
+                                }
+                            }
+
+                            // No live-state field for gamemode in stats.tools, so this
+                            // tile fires-and-forgets like Night light rather than
+                            // reflecting on/off like Keep awake does.
+                            ToolTile {
+                                glyph: "sports_esports"
+                                label: "Game mode"
+                                hint: "Toggle gamemode (drops effects and animations)"
+                                onTriggered: root.toggleAction(
+                                    Quickshell.env("HOME") + "/.config/hypr/scripts/gamemode.sh")
+                            }
+
+                            // Same as above - no stats field to bind active: to.
+                            ToolTile {
+                                glyph: "terminal"
+                                label: "Fastfetch"
+                                hint: "Show or hide fastfetch in new terminals"
+                                onTriggered: root.toggleAction(
+                                    Quickshell.env("HOME") + "/.config/hypr/shehan/bin/fastfetch-toggle.sh")
                             }
 
                             // A standalone GTK4/libadwaita app, deliberately not part of
