@@ -1291,8 +1291,20 @@ PanelWindow {
                                 hint: "Take a screenshot"
                                 onTriggered: {
                                     root.isOpen = false
+                                    // shehan/bin/screenshot.sh, NOT the old
+                                    // hypr/scripts/screenshot.sh this used to call.
+                                    // That one was ML4W's: it read three settings out
+                                    // of ~/.config/ml4w/settings/ and asked `rofi
+                                    // -dmenu` whether to copy or save -- and rofi was
+                                    // removed from the machine on 2026-08-18, so this
+                                    // tile had been dead for a day before anyone
+                                    // noticed. The keybinds (PRINT, SUPER+SHIFT+S...)
+                                    // were already on the ported script; this was the
+                                    // last caller of the old one, which is now deleted.
+                                    // `region` matches SUPER+SHIFT+S -- drag a box,
+                                    // saved and copied and toasted, no menu.
                                     Quickshell.execDetached(
-                                        ["bash", "-c", Quickshell.env("HOME") + "/.config/hypr/scripts/screenshot.sh"])
+                                        ["bash", "-c", Quickshell.env("HOME") + "/.config/hypr/shehan/bin/screenshot.sh region"])
                                 }
                             }
 

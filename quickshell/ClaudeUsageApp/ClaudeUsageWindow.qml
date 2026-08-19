@@ -547,7 +547,10 @@ PanelWindow {
                         hoverEnabled: true
                         cursorShape: Qt.PointingHandCursor
                         onClicked: {
-                            Quickshell.execDetached(["xdg-terminal-exec", "bash", "-c",
+                            // xdg-terminal-exec isn't installed on this machine; kitty is the
+                            // configured terminal (brilliant.json apps.terminal) and is already
+                            // hardcoded elsewhere in this app (see ControlCenterWindow.qml).
+                            Quickshell.execDetached(["kitty", "bash", "-c",
                                 "npx --yes ccusage@latest weekly --breakdown; read"])
                             root.isOpen = false
                         }
