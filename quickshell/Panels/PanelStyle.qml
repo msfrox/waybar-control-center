@@ -31,6 +31,12 @@ pragma Singleton
 // what they are built from. Reach for a component first — a raw `Rectangle`
 // with `PanelStyle.fillSubtle` on it is fine, but if you write the same one
 // twice it wants to be a component here instead.
+//
+// The numbers themselves now come from ~/.config/brilliant/tokens.json, read
+// live through the `Tokens` singleton. This file has become the ROLE layer —
+// which token a given panel part uses, and why — while tokens.json is the
+// VALUE layer. Change a number there and every surface that reads it here
+// moves at once, with no reload.
 
 import QtQuick
 import Quickshell
@@ -58,26 +64,26 @@ QtObject {
     // wallpaper around every popup. Keep panelAlpha above that threshold or the
     // frost silently stops applying.
 
-    readonly property int panelRadius: 10
-    readonly property real panelAlpha: 0.30
+    readonly property int panelRadius: Tokens.radius.lg
+    readonly property real panelAlpha: Tokens.opacity.panel
     readonly property color panelColor: style.withAlpha(Theme.background, style.panelAlpha)
 
-    readonly property int panelBorderWidth: 1
-    readonly property real panelBorderAlpha: 0.35
+    readonly property int panelBorderWidth: Tokens.size.border
+    readonly property real panelBorderAlpha: Tokens.opacity.panelBorder
     readonly property color panelBorderColor: style.withAlpha(Theme.primary, style.panelBorderAlpha)
 
     // Inside the card: how far the content sits off the border, and how far
     // apart consecutive blocks sit.
-    readonly property int panelPadding: 20
-    readonly property int panelSpacing: 10
+    readonly property int panelPadding: Tokens.space.huge
+    readonly property int panelSpacing: Tokens.space.lg
 
     // Outside the card: the transparent gutter the shadow lives in. A full
     // panel wants the roomy version; a popout hanging a few pixels off a bar
     // button wants the tight one, or the gap to the bar reads as a mistake.
-    readonly property int shadowMargin: 20
-    readonly property int popoutShadowMargin: 12
-    readonly property real shadowBlur: 15
-    readonly property color shadowColor: style.withAlpha(Theme.shadow, 0.4)
+    readonly property int shadowMargin: Tokens.shadow.margin
+    readonly property int popoutShadowMargin: Tokens.shadow.popoutMargin
+    readonly property real shadowBlur: Tokens.shadow.blur
+    readonly property color shadowColor: style.withAlpha(Theme.shadow, Tokens.opacity.shadow)
 
     // --- BAR SURFACES ---
     //
@@ -95,12 +101,12 @@ QtObject {
     // Radius is BarButton's pill radius deliberately: a plate on the bar that
     // rounds differently from the pills beside it invents a second shape
     // language two centimetres from the first.
-    readonly property real barAlpha: 0.60
+    readonly property real barAlpha: Tokens.opacity.bar
     readonly property color barColor: style.withAlpha(Theme.background, style.barAlpha)
-    readonly property real barPlateAlpha: 0.72
+    readonly property real barPlateAlpha: Tokens.opacity.barPlate
     readonly property color barPlateColor: style.withAlpha(Theme.background, style.barPlateAlpha)
-    readonly property int barRadius: 8
-    readonly property color barBorderColor: style.withAlpha(Theme.primary, 0.30)
+    readonly property int barRadius: Tokens.radius.md
+    readonly property color barBorderColor: style.withAlpha(Theme.primary, Tokens.opacity.barBorder)
 
     // --- FILLS ---
     //
@@ -109,22 +115,22 @@ QtObject {
     // stay correct through a wallpaper change.
 
     // A resting plate: tiles, pills, inactive rows.
-    readonly property color fillSubtle: style.withAlpha(Theme.on_surface, 0.07)
+    readonly property color fillSubtle: style.withAlpha(Theme.on_surface, Tokens.opacity.fillSubtle)
     // Slightly stronger, for a plate that has to read against another plate.
-    readonly property color fillRaised: style.withAlpha(Theme.on_surface, 0.10)
+    readonly property color fillRaised: style.withAlpha(Theme.on_surface, Tokens.opacity.fillRaised)
     // The unfilled part of any slider or progress track.
-    readonly property color fillTrack: style.withAlpha(Theme.on_surface, 0.20)
+    readonly property color fillTrack: style.withAlpha(Theme.on_surface, Tokens.opacity.fillTrack)
     // Pointer is over it, but it is not on.
-    readonly property color fillHover: style.withAlpha(Theme.primary, 0.18)
+    readonly property color fillHover: style.withAlpha(Theme.primary, Tokens.opacity.fillHover)
     // On. Solid accent — this is what makes a toggle readable without a label.
     readonly property color fillActive: Theme.primary
     // Selected-but-not-pressed rows in a list.
-    readonly property color fillSelected: style.withAlpha(Theme.primary, 0.15)
+    readonly property color fillSelected: style.withAlpha(Theme.primary, Tokens.opacity.fillSelected)
 
     // A hairline rule between blocks. Faint primary rather than grey, which is
     // what keeps a stack of sections from looking like a spreadsheet.
-    readonly property color separatorColor: style.withAlpha(Theme.primary, 0.25)
-    readonly property int separatorHeight: 1
+    readonly property color separatorColor: style.withAlpha(Theme.primary, Tokens.opacity.separator)
+    readonly property int separatorHeight: Tokens.size.separator
 
     // --- TEXT ---
     //
@@ -142,21 +148,21 @@ QtObject {
     // A dimmer shade of the primary text, for a value's trailing clause. Not
     // `textMuted` — outline is a different hue and reads as a different kind of
     // thing (a caption, not a quieter version of the same sentence).
-    readonly property color textDim: style.withAlpha(Theme.on_surface, 0.6)
+    readonly property color textDim: style.withAlpha(Theme.on_surface, Tokens.opacity.textDim)
 
     // Sizes. Named by role, because "12" tells the next reader nothing about
     // whether their new label should be 11 or 12.
-    readonly property int fsHero: 26       // the one big number on a panel
-    readonly property int fsTitle: 16      // a panel's own title
-    readonly property int fsBody: 12       // ordinary rows
-    readonly property int fsCaption: 11    // secondary lines, section headers
-    readonly property int fsSmall: 10      // tile labels, notes under a row
-    readonly property int fsMicro: 9       // the caption under a pill's value
+    readonly property int fsHero: Tokens.font.hero       // the one big number on a panel
+    readonly property int fsTitle: Tokens.font.title      // a panel's own title
+    readonly property int fsBody: Tokens.font.body       // ordinary rows
+    readonly property int fsCaption: Tokens.font.caption    // secondary lines, section headers
+    readonly property int fsSmall: Tokens.font.small      // tile labels, notes under a row
+    readonly property int fsMicro: Tokens.font.micro       // the caption under a pill's value
 
     // Section headers: uppercase, tracked out, muted. Consumers read these
     // rather than restating the three properties.
     readonly property int sectionLabelSize: style.fsCaption
-    readonly property real sectionLetterSpacing: 1
+    readonly property real sectionLetterSpacing: Tokens.font.sectionLetterSpacing
 
     // --- ICONS ---
     //
@@ -172,33 +178,33 @@ QtObject {
     readonly property string iconFamily: "Material Icons Round"
     readonly property string faFamily: "Font Awesome 7 Free"
     readonly property int faWeight: 900
-    readonly property int iconSize: 20
+    readonly property int iconSize: Tokens.size.icon
 
     // --- CONTROLS ---
 
-    readonly property int controlRadius: 8
-    readonly property int chipRadius: 11
-    readonly property int buttonRadius: 7
-    readonly property int buttonHeight: 30
-    readonly property int tileHeight: 56
-    readonly property int pillHeight: 48
+    readonly property int controlRadius: Tokens.radius.md
+    readonly property int chipRadius: Tokens.radius.xl
+    readonly property int buttonRadius: Tokens.radius.sm
+    readonly property int buttonHeight: Tokens.size.button
+    readonly property int tileHeight: Tokens.size.tile
+    readonly property int pillHeight: Tokens.size.pill
 
-    readonly property int trackHeight: 6
-    readonly property int trackRadius: 3
-    readonly property int handleSize: 16
+    readonly property int trackHeight: Tokens.size.track
+    readonly property int trackRadius: Tokens.radius.xs
+    readonly property int handleSize: Tokens.size.handle
     // A held handle inverts: accent ring, card-coloured centre. Reads as
     // "picked up" without needing a size change that would shift the track.
     readonly property color handlePressed: Theme.background
 
-    readonly property int switchWidth: 34
-    readonly property int switchHeight: 18
-    readonly property int switchKnob: 14
+    readonly property int switchWidth: Tokens.size.switchWidth
+    readonly property int switchHeight: Tokens.size.switchHeight
+    readonly property int switchKnob: Tokens.size.switchKnob
 
     // --- MOTION ---
     //
     // Three speeds. Anything slower than `slow` on a panel that opens and
     // closes as often as these do is felt as lag rather than seen as polish.
-    readonly property int animFast: 120     // hover recolours
-    readonly property int animNormal: 160   // state changes, switches
-    readonly property int animSlow: 260     // a value physically moving
+    readonly property int animFast: Tokens.motion.duration.fast     // hover recolours
+    readonly property int animNormal: Tokens.motion.duration.normal   // state changes, switches
+    readonly property int animSlow: Tokens.motion.duration.slow     // a value physically moving
 }
