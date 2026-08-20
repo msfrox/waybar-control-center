@@ -53,6 +53,15 @@ Singleton {
 
     function ageTextFor(n: var): string {
         root.clockTick // re-evaluate on every tick
+        // NotificationEntry.qml binds `text: ageTextFor(entry.notification)`.
+        // When an entry is dismissed the delegate tears down, `entry.notification`
+        // goes null, and the binding re-evaluates ONCE MORE before the delegate is
+        // destroyed -- so `n` arrives null and the dereference below threw. One
+        // throw per dismissal: 228 of them in a 685-line autostart.log, a third of
+        // everything that file recorded, which buried every other message in it.
+        // Returning "" is correct rather than merely defensive -- the delegate is
+        // on its way out and the value is discarded. Fixed 2026-08-20, Phase 2.0.
+        if (!n) return ""
         // A historic entry carries its own timestamp; a live one is looked up in
         // `arrivals`, because a Notification has no timestamp of its own.
         const at = n.historic ? n.at : root.arrivals[n.id]
