@@ -95,7 +95,7 @@ PanelWindow {
 
     Behavior on currentRightMargin {
         NumberAnimation {
-            duration: 350
+            duration: PanelStyle.animSlower
             easing.type: Easing.OutQuint
             onRunningChanged: if (!running && !root.isOpen) root.showWindow = false
         }
@@ -466,7 +466,7 @@ PanelWindow {
         visible: !root.isSectionHidden(section.title)
 
         Layout.fillWidth: true
-        spacing: 6
+        spacing: Tokens.space.sm
 
         // The header is wrapped in a plain Item so the click target can use
         // anchors: a MouseArea placed directly in a Layout is layout-managed,
@@ -477,7 +477,7 @@ PanelWindow {
 
             RowLayout {
                 anchors.fill: parent
-                spacing: 8
+                spacing: Tokens.space.md
 
                 Glyph {
                     text: section.glyph
@@ -515,16 +515,16 @@ PanelWindow {
         ColumnLayout {
             id: holder
             Layout.fillWidth: true
-            spacing: 6
+            spacing: Tokens.space.sm
             visible: !section.collapsed
         }
 
         Rectangle {
             Layout.fillWidth: true
-            Layout.topMargin: 4
+            Layout.topMargin: Tokens.space.xs
             implicitHeight: 1
             color: Theme.primary
-            opacity: 0.25
+            opacity: Tokens.opacity.separator
         }
     }
 
@@ -554,7 +554,7 @@ PanelWindow {
                 font.family: PanelStyle.fontFamily
                 font.pixelSize: 10
                 color: Theme.outline
-                rightPadding: 8
+                rightPadding: Tokens.space.md
             }
 
             Text {
@@ -569,15 +569,15 @@ PanelWindow {
         Rectangle {
             Layout.fillWidth: true
             implicitHeight: 6
-            radius: 3
+            radius: PanelStyle.trackRadius
             color: PanelStyle.fillTrack
 
             Rectangle {
                 width: parent.width * Math.min(1, Math.max(0, statRoot.percent / 100))
                 height: parent.height
-                radius: 3
+                radius: PanelStyle.trackRadius
                 color: root.loadColor(statRoot.percent)
-                Behavior on width { NumberAnimation { duration: 300 } }
+                Behavior on width { NumberAnimation { duration: PanelStyle.animSlow } }
             }
         }
     }
@@ -605,17 +605,17 @@ PanelWindow {
 
         Layout.fillWidth: true
         implicitHeight: 56
-        radius: 8
+        radius: PanelStyle.controlRadius
         color: active ? Theme.primary
                       : tileMouse.containsMouse
                         ? PanelStyle.fillHover
                         : PanelStyle.fillSubtle
-        Behavior on color { ColorAnimation { duration: 150 } }
+        Behavior on color { ColorAnimation { duration: PanelStyle.animNormal } }
         clip: true
 
         ColumnLayout {
             anchors.centerIn: parent
-            spacing: 1
+            spacing: Tokens.space.hairline
 
             Glyph {
                 Layout.alignment: Qt.AlignHCenter
@@ -652,7 +652,7 @@ PanelWindow {
         signal moved(int value)
 
         Layout.fillWidth: true
-        spacing: 12
+        spacing: Tokens.space.xl
 
         Glyph {
             text: brow.glyph
@@ -697,13 +697,13 @@ PanelWindow {
                 implicitHeight: 6
                 width: brightSlider.availableWidth
                 height: implicitHeight
-                radius: 3
+                radius: PanelStyle.trackRadius
                 color: PanelStyle.fillTrack
 
                 Rectangle {
                     width: brightSlider.visualPosition * parent.width
                     height: parent.height
-                    radius: 3
+                    radius: PanelStyle.trackRadius
                     color: Theme.primary
                 }
             }
@@ -713,7 +713,7 @@ PanelWindow {
                 y: brightSlider.topPadding + brightSlider.availableHeight / 2 - height / 2
                 implicitWidth: 16
                 implicitHeight: 16
-                radius: 100
+                radius: Tokens.radius.full
                 color: brightSlider.pressed ? Theme.background : Theme.primary
                 border.color: Theme.primary
                 border.width: 2
@@ -742,13 +742,13 @@ PanelWindow {
 
         Layout.fillWidth: true
         implicitHeight: 48
-        radius: 8
+        radius: PanelStyle.controlRadius
         color: PanelStyle.fillSubtle
         clip: true
 
         ColumnLayout {
             anchors.centerIn: parent
-            spacing: 0
+            spacing: Tokens.space.none
 
             RowLayout {
                 Layout.alignment: Qt.AlignHCenter
@@ -788,19 +788,19 @@ PanelWindow {
 
         implicitHeight: 22
         implicitWidth: Math.min(chipText.implicitWidth, 90) + 18
-        radius: 11
+        radius: PanelStyle.chipRadius
         color: chip.active ? Theme.primary
                             : chipMouse.containsMouse
                               ? PanelStyle.fillHover
                               : PanelStyle.fillSubtle
         border.width: chip.active ? 0 : 1
-        border.color: PanelStyle.withAlpha(PanelStyle.textMuted, 0.4)
-        Behavior on color { ColorAnimation { duration: 150 } }
+        border.color: PanelStyle.withAlpha(PanelStyle.textMuted, Tokens.opacity.panelBorder)
+        Behavior on color { ColorAnimation { duration: PanelStyle.animNormal } }
 
         Text {
             id: chipText
             anchors.fill: parent
-            anchors.margins: 9
+            anchors.margins: Tokens.space.md
             verticalAlignment: Text.AlignVCenter
             horizontalAlignment: Text.AlignHCenter
             text: chip.label
@@ -856,10 +856,10 @@ PanelWindow {
             // --- HEADER ---
             RowLayout {
                 Layout.fillWidth: true
-                spacing: 10
+                spacing: Tokens.space.lg
 
                 ColumnLayout {
-                    spacing: 0
+                    spacing: Tokens.space.none
 
                     Text {
                         text: Qt.formatDateTime(clock.now, "dddd")
@@ -895,9 +895,9 @@ PanelWindow {
                     visible: !!root.weather.temp
                     implicitWidth: weatherRow.implicitWidth + 16
                     implicitHeight: 30
-                    radius: 6
+                    radius: PanelStyle.buttonRadius
                     color: weatherMouse.containsMouse
-                           ? Qt.rgba(Theme.primary.r, Theme.primary.g, Theme.primary.b, 0.14)
+                           ? PanelStyle.fillHover
                            : "transparent"
 
                     ToolTip.visible: weatherMouse.containsMouse
@@ -960,9 +960,9 @@ PanelWindow {
                 Rectangle {
                     implicitWidth: 30
                     implicitHeight: 30
-                    radius: 6
+                    radius: PanelStyle.buttonRadius
                     color: powerMouse.containsMouse
-                           ? Qt.rgba(Theme.error.r, Theme.error.g, Theme.error.b, 0.18)
+                           ? Qt.rgba(Theme.error.r, Theme.error.g, Theme.error.b, Tokens.opacity.fillHover)
                            : "transparent"
 
                     ToolTip.visible: powerMouse.containsMouse
@@ -996,7 +996,7 @@ PanelWindow {
                 Layout.fillWidth: true
                 implicitHeight: 1
                 color: Theme.primary
-                opacity: 0.3
+                opacity: Tokens.opacity.barBorder
             }
 
             // --- SCROLLING BODY ---
@@ -1008,7 +1008,7 @@ PanelWindow {
             ColumnLayout {
                     id: body
                     Layout.fillWidth: true
-                    spacing: 12
+                    spacing: Tokens.space.xl
 
                     onImplicitHeightChanged: root.bodyHeight = implicitHeight
                     Component.onCompleted: root.bodyHeight = implicitHeight
@@ -1059,13 +1059,13 @@ PanelWindow {
                         // three is the most that still fits a rate string.
                         GridLayout {
                             Layout.fillWidth: true
-                            Layout.topMargin: 4
+                            Layout.topMargin: Tokens.space.xs
                             // Three wide: Down and Up still land side by side on
                             // the first row, and the two fans fill the second
                             // instead of leaving a hole.
                             columns: 3
-                            rowSpacing: 6
-                            columnSpacing: 6
+                            rowSpacing: Tokens.space.sm
+                            columnSpacing: Tokens.space.sm
 
                             InfoPill {
                                 glyph: "download"
@@ -1154,8 +1154,8 @@ PanelWindow {
                             id: quickGrid
                             Layout.fillWidth: true
                             columns: 4
-                            rowSpacing: 6
-                            columnSpacing: 6
+                            rowSpacing: Tokens.space.sm
+                            columnSpacing: Tokens.space.sm
 
                             // The first four are the toggles a notification
                             // panel's own buttons-grid usually carries, so the
@@ -1408,7 +1408,7 @@ PanelWindow {
                         RowLayout {
                             Layout.fillWidth: true
                             visible: Mpris.players.values.length > 1
-                            spacing: 6
+                            spacing: Tokens.space.sm
 
                             Repeater {
                                 model: Mpris.players.values
@@ -1434,24 +1434,24 @@ PanelWindow {
                         ColumnLayout {
                             Layout.fillWidth: true
                             visible: !!mediaSection.player
-                            spacing: 8
+                            spacing: Tokens.space.md
 
                             Rectangle {
                                 Layout.fillWidth: true
                                 implicitHeight: 56
-                                radius: 8
+                                radius: PanelStyle.controlRadius
                                 color: trackMouse.containsMouse
-                                       ? PanelStyle.fillSelected
+                                       ? PanelStyle.fillHover
                                        : "transparent"
 
                                 RowLayout {
                                     anchors.fill: parent
-                                    spacing: 10
+                                    spacing: Tokens.space.lg
 
                                     Rectangle {
                                         Layout.preferredWidth: 48
                                         Layout.preferredHeight: 48
-                                        radius: 6
+                                        radius: PanelStyle.buttonRadius
                                         color: "transparent"
                                         clip: true
                                         visible: !!(mediaSection.player && mediaSection.player.trackArtUrl)
@@ -1466,7 +1466,7 @@ PanelWindow {
 
                                     ColumnLayout {
                                         Layout.fillWidth: true
-                                        spacing: 1
+                                        spacing: Tokens.space.hairline
 
                                         Text {
                                             Layout.fillWidth: true
@@ -1507,7 +1507,7 @@ PanelWindow {
                                             && mediaSection.player.positionSupported
                                             && mediaSection.player.length > 0)
                                 implicitHeight: 3
-                                radius: 1.5
+                                radius: Tokens.radius.full
                                 color: PanelStyle.fillTrack
 
                                 Rectangle {
@@ -1592,9 +1592,9 @@ PanelWindow {
                         Rectangle {
                             Layout.fillWidth: true
                             implicitHeight: 44
-                            radius: 8
+                            radius: PanelStyle.controlRadius
                             color: notifMouse.containsMouse
-                                   ? PanelStyle.fillSelected
+                                   ? PanelStyle.fillHover
                                    : PanelStyle.fillSubtle
 
                             ToolTip.visible: notifMouse.containsMouse
@@ -1603,9 +1603,9 @@ PanelWindow {
 
                             RowLayout {
                                 anchors.fill: parent
-                                anchors.leftMargin: 12
-                                anchors.rightMargin: 12
-                                spacing: 10
+                                anchors.leftMargin: Tokens.space.xl
+                                anchors.rightMargin: Tokens.space.xl
+                                spacing: Tokens.space.lg
 
                                 Glyph {
                                     text: NotificationState.dnd ? "notifications_off"
@@ -1655,9 +1655,9 @@ PanelWindow {
                         Rectangle {
                             Layout.fillWidth: true
                             implicitHeight: 44
-                            radius: 8
+                            radius: PanelStyle.controlRadius
                             color: updatesMouse.containsMouse
-                                   ? PanelStyle.fillSelected
+                                   ? PanelStyle.fillHover
                                    : PanelStyle.fillSubtle
 
                             ToolTip.visible: updatesMouse.containsMouse && root.updateCount > 0
@@ -1666,9 +1666,9 @@ PanelWindow {
 
                             RowLayout {
                                 anchors.fill: parent
-                                anchors.leftMargin: 12
-                                anchors.rightMargin: 12
-                                spacing: 10
+                                anchors.leftMargin: Tokens.space.xl
+                                anchors.rightMargin: Tokens.space.xl
+                                spacing: Tokens.space.lg
 
                                 Glyph {
                                     text: root.updateCount > 0 ? "download_for_offline" : "check_circle"
@@ -1740,7 +1740,7 @@ PanelWindow {
                                 readonly property bool menuOpen: trayRepeater.openItem === trayRow.modelData
 
                                 Layout.fillWidth: true
-                                spacing: 4
+                                spacing: Tokens.space.xs
 
                                 // Resolves the item's menu handle into a flat list of
                                 // QsMenuEntry children. Kept bound regardless of menuOpen
@@ -1754,16 +1754,16 @@ PanelWindow {
                                 Rectangle {
                                     Layout.fillWidth: true
                                     implicitHeight: 38
-                                    radius: 6
+                                    radius: PanelStyle.buttonRadius
                                     color: trayMouse.containsMouse
-                                           ? Qt.rgba(Theme.primary.r, Theme.primary.g, Theme.primary.b, 0.12)
+                                           ? PanelStyle.fillHover
                                            : "transparent"
 
                                     RowLayout {
                                         anchors.fill: parent
-                                        anchors.leftMargin: 6
-                                        anchors.rightMargin: 6
-                                        spacing: 10
+                                        anchors.leftMargin: Tokens.space.sm
+                                        anchors.rightMargin: Tokens.space.sm
+                                        spacing: Tokens.space.lg
 
                                         Image {
                                             source: trayRow.modelData.icon
@@ -1836,7 +1836,7 @@ PanelWindow {
                                 ColumnLayout {
                                     Layout.fillWidth: true
                                     Layout.leftMargin: 14
-                                    spacing: 0
+                                    spacing: Tokens.space.none
                                     visible: trayRow.menuOpen
 
                                     Repeater {
@@ -1848,9 +1848,9 @@ PanelWindow {
 
                                             Layout.fillWidth: true
                                             implicitHeight: entryRow.modelData.isSeparator ? 9 : 30
-                                            radius: 6
+                                            radius: PanelStyle.buttonRadius
                                             color: entryMouse.containsMouse
-                                                   ? Qt.rgba(Theme.primary.r, Theme.primary.g, Theme.primary.b, 0.12)
+                                                   ? PanelStyle.fillHover
                                                    : "transparent"
 
                                             // A separator carries no text - a hairline
@@ -1866,9 +1866,9 @@ PanelWindow {
 
                                             RowLayout {
                                                 anchors.fill: parent
-                                                anchors.leftMargin: 6
-                                                anchors.rightMargin: 6
-                                                spacing: 8
+                                                anchors.leftMargin: Tokens.space.sm
+                                                anchors.rightMargin: Tokens.space.sm
+                                                spacing: Tokens.space.md
                                                 visible: !entryRow.modelData.isSeparator
 
                                                 Image {

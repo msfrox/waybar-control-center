@@ -5,6 +5,7 @@ import QtQuick
 import QtQuick.Layouts
 import QtQuick.Controls
 import qs.CustomTheme
+import qs.Panels
 
 // One notification, as drawn in the panel list and inside a toast.
 //
@@ -18,7 +19,7 @@ Rectangle {
     property bool showBackground: true
 
     implicitHeight: layout.implicitHeight + 20
-    radius: 8
+    radius: PanelStyle.controlRadius
     color: showBackground
         ? Qt.rgba(Theme.surface_container_high.r, Theme.surface_container_high.g,
                   Theme.surface_container_high.b, 0.45)
@@ -39,8 +40,8 @@ Rectangle {
     RowLayout {
         id: layout
         anchors.fill: parent
-        anchors.margins: 10
-        spacing: 10
+        anchors.margins: Tokens.space.lg
+        spacing: Tokens.space.lg
 
         // --- ICON ---
         // `image` is the picture a notification carries (album art, an avatar);
@@ -64,11 +65,11 @@ Rectangle {
 
         ColumnLayout {
             Layout.fillWidth: true
-            spacing: 2
+            spacing: Tokens.space.xxs
 
             RowLayout {
                 Layout.fillWidth: true
-                spacing: 6
+                spacing: Tokens.space.sm
 
                 Text {
                     text: entry.notification.appName
@@ -149,8 +150,8 @@ Rectangle {
             // --- ACTIONS ---
             Flow {
                 Layout.fillWidth: true
-                Layout.topMargin: 6
-                spacing: 6
+                Layout.topMargin: Tokens.space.sm
+                spacing: Tokens.space.sm
                 visible: entry.notification.actions.length > 0
 
                 Repeater {
@@ -162,7 +163,7 @@ Rectangle {
                             color: "transparent"
                             border.color: Theme.primary
                             border.width: 1
-                            radius: 6
+                            radius: PanelStyle.buttonRadius
                         }
                         contentItem: Text {
                             text: modelData.text
@@ -172,8 +173,8 @@ Rectangle {
                             horizontalAlignment: Text.AlignHCenter
                             verticalAlignment: Text.AlignVCenter
                             padding: 3
-                            leftPadding: 9
-                            rightPadding: 9
+                            leftPadding: Tokens.space.lg
+                            rightPadding: Tokens.space.lg
                         }
                         onClicked: {
                             modelData.invoke()

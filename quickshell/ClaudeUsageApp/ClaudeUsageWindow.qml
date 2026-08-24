@@ -25,6 +25,7 @@ import QtQuick.Layouts
 import QtQuick.Controls
 import QtQuick.Effects
 import qs.CustomTheme
+import qs.Panels
 
 PanelWindow {
     id: root
@@ -56,7 +57,7 @@ PanelWindow {
 
     Behavior on currentBottomMargin {
         NumberAnimation {
-            duration: 350
+            duration: Tokens.motion.duration.slower
             easing.type: Easing.OutQuint
             onRunningChanged: if (!running && !root.isOpen) root.showWindow = false
         }
@@ -198,7 +199,7 @@ PanelWindow {
         font.capitalization: Font.AllUppercase
         font.letterSpacing: 1
         color: Theme.outline
-        Layout.topMargin: 4
+        Layout.topMargin: Tokens.space.xs
     }
 
     component Divider: Rectangle {
@@ -215,7 +216,7 @@ PanelWindow {
         required property string resets
 
         Layout.fillWidth: true
-        spacing: 4
+        spacing: Tokens.space.xs
 
         RowLayout {
             Layout.fillWidth: true
@@ -226,7 +227,7 @@ PanelWindow {
                 font.family: Theme.fontFamily
                 font.pixelSize: 12
                 color: Theme.on_surface
-                leftPadding: 8
+                leftPadding: Tokens.space.md
             }
 
             Text {
@@ -240,10 +241,10 @@ PanelWindow {
 
         Rectangle {
             Layout.fillWidth: true
-            Layout.leftMargin: 8
+            Layout.leftMargin: Tokens.space.md
             implicitHeight: 6
-            radius: 3
-            color: Qt.rgba(Theme.on_surface.r, Theme.on_surface.g, Theme.on_surface.b, 0.2)
+            radius: PanelStyle.trackRadius
+            color: PanelStyle.fillTrack
 
             Rectangle {
                 // Always the *used* fraction, whichever way the number above is
@@ -251,9 +252,9 @@ PanelWindow {
                 // backwards.
                 width: parent.width * Math.min(1, Math.max(0, parent.parent.pct / 100))
                 height: parent.height
-                radius: 3
+                radius: PanelStyle.trackRadius
                 color: root.levelColor(parent.parent.pct)
-                Behavior on width { NumberAnimation { duration: 250 } }
+                Behavior on width { NumberAnimation { duration: PanelStyle.animSlow } }
             }
         }
 
@@ -263,7 +264,7 @@ PanelWindow {
             font.family: Theme.fontFamily
             font.pixelSize: 10
             color: Theme.outline
-            leftPadding: 8
+            leftPadding: Tokens.space.md
         }
     }
 
@@ -277,7 +278,7 @@ PanelWindow {
         signal picked(string value)
 
         Layout.fillWidth: true
-        spacing: 8
+        spacing: Tokens.space.md
 
         Text {
             text: seg.label
@@ -285,7 +286,7 @@ PanelWindow {
             font.pixelSize: 11
             color: Theme.outline
             Layout.preferredWidth: 96
-            leftPadding: 8
+            leftPadding: Tokens.space.md
         }
 
         Repeater {
@@ -296,14 +297,14 @@ PanelWindow {
                 readonly property bool selected: String(modelData.value) === seg.current
 
                 implicitHeight: 24
-                implicitWidth: pillText.implicitWidth + 20
-                radius: 100
+                implicitWidth: pillText.implicitWidth + Tokens.space.huge
+                radius: Tokens.radius.full
                 color: selected ? Theme.primary
                                 : pillMouse.containsMouse
-                                  ? Qt.rgba(Theme.primary.r, Theme.primary.g, Theme.primary.b, 0.18)
+                                  ? PanelStyle.fillHover
                                   : "transparent"
                 border.width: selected ? 0 : 1
-                border.color: Qt.rgba(Theme.on_surface.r, Theme.on_surface.g, Theme.on_surface.b, 0.25)
+                border.color: Qt.rgba(Theme.on_surface.r, Theme.on_surface.g, Theme.on_surface.b, Tokens.opacity.separator)
 
                 Text {
                     id: pillText
@@ -332,13 +333,13 @@ PanelWindow {
     // ==========================================
     Item {
         anchors.fill: parent
-        anchors.margins: 20
+        anchors.margins: PanelStyle.shadowMargin
 
         RectangularShadow {
             anchors.fill: mainBgRect
             radius: mainBgRect.radius
             blur: 15
-            color: Qt.rgba(Theme.shadow.r, Theme.shadow.g, Theme.shadow.b, 0.4)
+            color: PanelStyle.shadowColor
         }
 
         // One rectangle: translucent fill, solid hairline border. A gradient
@@ -350,22 +351,22 @@ PanelWindow {
         Rectangle {
             id: mainBgRect
             anchors.fill: parent
-            radius: 10
-            color: Qt.rgba(Theme.background.r, Theme.background.g, Theme.background.b, 0.30)
-            border.width: 1
-            border.color: Qt.rgba(Theme.primary.r, Theme.primary.g, Theme.primary.b, 0.35)
+            radius: PanelStyle.panelRadius
+            color: PanelStyle.panelColor
+            border.width: PanelStyle.panelBorderWidth
+            border.color: PanelStyle.panelBorderColor
         }
 
         ColumnLayout {
             id: content
             anchors.fill: parent
-            anchors.margins: 20
-            spacing: 10
+            anchors.margins: PanelStyle.panelPadding
+            spacing: PanelStyle.panelSpacing
 
             // --- HEADER ---
             RowLayout {
                 Layout.fillWidth: true
-                spacing: 10
+                spacing: PanelStyle.panelSpacing
 
                 Text {
                     Layout.fillWidth: true
@@ -379,9 +380,9 @@ PanelWindow {
                 Rectangle {
                     implicitWidth: 28
                     implicitHeight: 28
-                    radius: 6
+                    radius: PanelStyle.buttonRadius
                     color: refreshMouse.containsMouse
-                           ? Qt.rgba(Theme.primary.r, Theme.primary.g, Theme.primary.b, 0.15)
+                           ? PanelStyle.fillSelected
                            : "transparent"
 
                     ToolTip.visible: refreshMouse.containsMouse
@@ -411,19 +412,19 @@ PanelWindow {
             // --- ERROR ---
             ColumnLayout {
                 Layout.fillWidth: true
-                Layout.topMargin: 4
-                spacing: 4
+                Layout.topMargin: Tokens.space.xs
+                spacing: Tokens.space.xs
                 visible: root.state.error !== undefined && root.state.error !== null
 
                 RowLayout {
                     Layout.fillWidth: true
-                    spacing: 8
+                    spacing: Tokens.space.md
 
                     Glyph {
                         text: "error_outline"
                         font.pixelSize: 16
                         color: Theme.error
-                        leftPadding: 8
+                        leftPadding: Tokens.space.md
                     }
 
                     Text {
@@ -442,7 +443,7 @@ PanelWindow {
                     font.family: Theme.fontFamily
                     font.pixelSize: 11
                     color: Theme.on_surface
-                    leftPadding: 8
+                    leftPadding: Tokens.space.md
                     wrapMode: Text.WordWrap
                 }
 
@@ -452,7 +453,7 @@ PanelWindow {
                     font.family: Theme.fontFamily
                     font.pixelSize: 10
                     color: Theme.outline
-                    leftPadding: 8
+                    leftPadding: Tokens.space.md
                     wrapMode: Text.WordWrap
                 }
             }
@@ -484,7 +485,7 @@ PanelWindow {
                 font.family: Theme.fontFamily
                 font.pixelSize: 10
                 color: Theme.outline
-                leftPadding: 8
+                leftPadding: Tokens.space.md
                 wrapMode: Text.WordWrap
             }
 
@@ -527,7 +528,7 @@ PanelWindow {
             // --- FOOTER ---
             RowLayout {
                 Layout.fillWidth: true
-                Layout.topMargin: 2
+                Layout.topMargin: Tokens.space.xxs
 
                 Text {
                     Layout.fillWidth: true
@@ -535,7 +536,7 @@ PanelWindow {
                     font.family: Theme.fontFamily
                     font.pixelSize: 12
                     color: breakdownMouse.containsMouse ? Theme.primary : Theme.on_surface
-                    leftPadding: 8
+                    leftPadding: Tokens.space.md
 
                     ToolTip.visible: breakdownMouse.containsMouse
                     ToolTip.text: "Open ccusage weekly --breakdown in a terminal"

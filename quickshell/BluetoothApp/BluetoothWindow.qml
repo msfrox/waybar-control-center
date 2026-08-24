@@ -22,6 +22,7 @@ import QtQuick.Layouts
 import QtQuick.Controls
 import QtQuick.Effects
 import qs.CustomTheme
+import qs.Panels
 
 PanelWindow {
     id: root
@@ -62,7 +63,7 @@ PanelWindow {
 
     Behavior on currentBottomMargin {
         NumberAnimation {
-            duration: 350
+            duration: PanelStyle.animSlower
             easing.type: Easing.OutQuint
             onRunningChanged: if (!running && !root.isOpen) root.showWindow = false
         }
@@ -127,14 +128,14 @@ PanelWindow {
         font.capitalization: Font.AllUppercase
         font.letterSpacing: 1
         color: Theme.outline
-        Layout.topMargin: 4
+        Layout.topMargin: Tokens.space.xs
     }
 
     component Divider: Rectangle {
         Layout.fillWidth: true
         implicitHeight: 1
         color: Theme.primary
-        opacity: 0.3
+        opacity: PanelStyle.dividerAlpha
     }
 
     component Toggle: Rectangle {
@@ -144,18 +145,18 @@ PanelWindow {
 
         implicitWidth: 40
         implicitHeight: 22
-        radius: 100
-        color: checked ? Theme.primary : Qt.rgba(Theme.on_surface.r, Theme.on_surface.g, Theme.on_surface.b, 0.25)
-        Behavior on color { ColorAnimation { duration: 150 } }
+        radius: Tokens.radius.full
+        color: checked ? Theme.primary : Qt.rgba(Theme.on_surface.r, Theme.on_surface.g, Theme.on_surface.b, Tokens.opacity.separator)
+        Behavior on color { ColorAnimation { duration: PanelStyle.animNormal } }
 
         Rectangle {
             width: 16
             height: 16
-            radius: 100
+            radius: Tokens.radius.full
             color: tgl.checked ? Theme.on_primary : Theme.background
             anchors.verticalCenter: parent.verticalCenter
             x: tgl.checked ? parent.width - width - 3 : 3
-            Behavior on x { NumberAnimation { duration: 150; easing.type: Easing.OutCubic } }
+            Behavior on x { NumberAnimation { duration: PanelStyle.animNormal; easing.type: Easing.OutCubic } }
         }
 
         MouseArea {
@@ -173,16 +174,16 @@ PanelWindow {
 
         Layout.fillWidth: true
         implicitHeight: 40
-        radius: 6
+        radius: Tokens.radius.sm
         color: mouse.containsMouse
-               ? Qt.rgba(Theme.primary.r, Theme.primary.g, Theme.primary.b, 0.12)
+               ? PanelStyle.fillHover
                : "transparent"
 
         RowLayout {
             anchors.fill: parent
-            anchors.leftMargin: 8
-            anchors.rightMargin: 8
-            spacing: 10
+            anchors.leftMargin: Tokens.space.md
+            anchors.rightMargin: Tokens.space.md
+            spacing: Tokens.space.lg
 
             Glyph {
                 text: root.deviceGlyph(devRoot.dev)
@@ -239,7 +240,7 @@ PanelWindow {
         MouseArea {
             id: mouse
             anchors.fill: parent
-            anchors.rightMargin: 28   // leave the forget button its own hit area
+            anchors.rightMargin: Tokens.space.gutter   // leave the forget button its own hit area
             hoverEnabled: true
             cursorShape: Qt.PointingHandCursor
             onClicked: {
@@ -255,13 +256,13 @@ PanelWindow {
     // ==========================================
     Item {
         anchors.fill: parent
-        anchors.margins: 20
+        anchors.margins: PanelStyle.shadowMargin
 
         RectangularShadow {
             anchors.fill: mainBgRect
             radius: mainBgRect.radius
             blur: 15
-            color: Qt.rgba(Theme.shadow.r, Theme.shadow.g, Theme.shadow.b, 0.4)
+            color: PanelStyle.shadowColor
         }
 
         // One rectangle: translucent fill, solid hairline border. A gradient
@@ -273,22 +274,22 @@ PanelWindow {
         Rectangle {
             id: mainBgRect
             anchors.fill: parent
-            radius: 10
-            color: Qt.rgba(Theme.background.r, Theme.background.g, Theme.background.b, 0.30)
+            radius: PanelStyle.panelRadius
+            color: PanelStyle.panelColor
             border.width: 1
-            border.color: Qt.rgba(Theme.primary.r, Theme.primary.g, Theme.primary.b, 0.35)
+            border.color: PanelStyle.panelBorderColor
         }
 
         ColumnLayout {
             id: content
             anchors.fill: parent
-            anchors.margins: 20
-            spacing: 10
+            anchors.margins: PanelStyle.panelPadding
+            spacing: PanelStyle.panelSpacing
 
             // --- HEADER ---
             RowLayout {
                 Layout.fillWidth: true
-                spacing: 10
+                spacing: Tokens.space.lg
 
                 Text {
                     Layout.fillWidth: true
@@ -308,9 +309,9 @@ PanelWindow {
                 Rectangle {
                     implicitWidth: 28
                     implicitHeight: 28
-                    radius: 6
+                    radius: PanelStyle.buttonRadius
                     color: settingsMouse.containsMouse
-                           ? Qt.rgba(Theme.primary.r, Theme.primary.g, Theme.primary.b, 0.15)
+                           ? PanelStyle.fillHover
                            : "transparent"
 
                     ToolTip.visible: settingsMouse.containsMouse
@@ -337,13 +338,13 @@ PanelWindow {
             // --- OFF / NO ADAPTER ---
             Text {
                 Layout.fillWidth: true
-                Layout.topMargin: 6
+                Layout.topMargin: Tokens.space.sm
                 visible: !root.adapter || !root.adapter.enabled
                 text: root.adapter ? "Bluetooth is off" : "No Bluetooth adapter"
                 font.family: Theme.fontFamily
                 font.pixelSize: 12
                 color: Theme.outline
-                leftPadding: 8
+                leftPadding: Tokens.space.md
             }
 
             // --- CONNECTED ---
@@ -354,7 +355,7 @@ PanelWindow {
 
             ColumnLayout {
                 Layout.fillWidth: true
-                spacing: 2
+                spacing: Tokens.space.xxs
                 visible: root.adapter && root.adapter.enabled && root.connected.length > 0
 
                 Repeater {
@@ -374,7 +375,7 @@ PanelWindow {
 
             ColumnLayout {
                 Layout.fillWidth: true
-                spacing: 2
+                spacing: Tokens.space.xxs
                 visible: root.adapter && root.adapter.enabled && root.known.length > 0
 
                 Repeater {
@@ -389,7 +390,7 @@ PanelWindow {
             // --- DISCOVERED ---
             RowLayout {
                 Layout.fillWidth: true
-                Layout.topMargin: 4
+                Layout.topMargin: Tokens.space.xs
                 visible: root.adapter && root.adapter.enabled
 
                 SectionLabel { Layout.fillWidth: true; text: "Available" }
@@ -417,7 +418,7 @@ PanelWindow {
 
             ColumnLayout {
                 Layout.fillWidth: true
-                spacing: 2
+                spacing: Tokens.space.xxs
                 visible: root.adapter && root.adapter.enabled
 
                 Repeater {
@@ -438,7 +439,7 @@ PanelWindow {
                 font.family: Theme.fontFamily
                 font.pixelSize: 11
                 color: Theme.outline
-                leftPadding: 8
+                leftPadding: Tokens.space.md
             }
 
             Item { Layout.fillHeight: true }

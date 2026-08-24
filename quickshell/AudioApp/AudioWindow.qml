@@ -25,6 +25,7 @@ import QtQuick.Layouts
 import QtQuick.Controls
 import QtQuick.Effects
 import qs.CustomTheme
+import qs.Panels
 
 PanelWindow {
     id: root
@@ -103,7 +104,7 @@ PanelWindow {
 
     Behavior on currentBottomMargin {
         NumberAnimation {
-            duration: 350
+            duration: PanelStyle.animSlower
             easing.type: Easing.OutQuint
             // Unmap only once the hide animation has finished, or Wayland tears
             // the surface down mid-slide.
@@ -215,7 +216,7 @@ PanelWindow {
         required property string onIcon
         required property string offIcon
 
-        spacing: 12
+        spacing: Tokens.space.xl
         Layout.fillWidth: true
 
         readonly property var audio: node ? node.audio : null
@@ -224,8 +225,8 @@ PanelWindow {
         Rectangle {
             implicitWidth: 34
             implicitHeight: 34
-            radius: 100
-            color: rowRoot.muted ? "transparent" : Qt.rgba(Theme.primary.r, Theme.primary.g, Theme.primary.b, 0.15)
+            radius: Tokens.radius.full
+            color: rowRoot.muted ? "transparent" : PanelStyle.fillSelected
 
             Glyph {
                 anchors.centerIn: parent
@@ -264,14 +265,14 @@ PanelWindow {
                 implicitHeight: 6
                 width: slider.availableWidth
                 height: implicitHeight
-                radius: 3
-                color: Qt.rgba(Theme.on_surface.r, Theme.on_surface.g, Theme.on_surface.b, 0.2)
+                radius: PanelStyle.trackRadius
+                color: PanelStyle.fillTrack
 
                 Rectangle {
                     width: slider.visualPosition * parent.width
                     height: parent.height
                     color: rowRoot.muted ? Theme.outline : Theme.primary
-                    radius: 3
+                    radius: PanelStyle.trackRadius
                 }
             }
 
@@ -280,7 +281,7 @@ PanelWindow {
                 y: slider.topPadding + slider.availableHeight / 2 - height / 2
                 implicitWidth: 16
                 implicitHeight: 16
-                radius: 100
+                radius: Tokens.radius.full
                 color: slider.pressed ? Theme.background : Theme.primary
                 border.color: Theme.primary
                 border.width: 2
@@ -307,21 +308,21 @@ PanelWindow {
 
         Layout.fillWidth: true
         implicitHeight: 32
-        radius: 6
+        radius: PanelStyle.buttonRadius
         color: mouse.containsMouse
-               ? Qt.rgba(Theme.primary.r, Theme.primary.g, Theme.primary.b, 0.12)
+               ? PanelStyle.fillHover
                : "transparent"
 
         RowLayout {
             anchors.fill: parent
-            anchors.leftMargin: 8
-            anchors.rightMargin: 8
-            spacing: 10
+            anchors.leftMargin: Tokens.space.md
+            anchors.rightMargin: Tokens.space.md
+            spacing: PanelStyle.panelSpacing
 
             Rectangle {
                 implicitWidth: 12
                 implicitHeight: 12
-                radius: 100
+                radius: Tokens.radius.full
                 color: "transparent"
                 border.width: 2
                 border.color: devRoot.selected ? Theme.primary : Theme.outline
@@ -330,7 +331,7 @@ PanelWindow {
                     anchors.centerIn: parent
                     width: 6
                     height: 6
-                    radius: 100
+                    radius: Tokens.radius.full
                     color: Theme.primary
                     visible: devRoot.selected
                 }
@@ -361,14 +362,14 @@ PanelWindow {
         font.capitalization: Font.AllUppercase
         font.letterSpacing: 1
         color: Theme.outline
-        Layout.topMargin: 4
+        Layout.topMargin: Tokens.space.xs
     }
 
     component Divider: Rectangle {
         Layout.fillWidth: true
         implicitHeight: 1
         color: Theme.primary
-        opacity: 0.3
+        opacity: PanelStyle.dividerAlpha
     }
 
     // ==========================================
@@ -376,13 +377,13 @@ PanelWindow {
     // ==========================================
     Item {
         anchors.fill: parent
-        anchors.margins: 20
+        anchors.margins: PanelStyle.shadowMargin
 
         RectangularShadow {
             anchors.fill: mainBgRect
             radius: mainBgRect.radius
             blur: 15
-            color: Qt.rgba(Theme.shadow.r, Theme.shadow.g, Theme.shadow.b, 0.4)
+            color: PanelStyle.shadowColor
         }
 
         // One rectangle: translucent fill, solid hairline border. A gradient
@@ -394,17 +395,17 @@ PanelWindow {
         Rectangle {
             id: mainBgRect
             anchors.fill: parent
-            radius: 10
-            color: Qt.rgba(Theme.background.r, Theme.background.g, Theme.background.b, 0.30)
-            border.width: 1
-            border.color: Qt.rgba(Theme.primary.r, Theme.primary.g, Theme.primary.b, 0.35)
+            radius: PanelStyle.panelRadius
+            color: PanelStyle.panelColor
+            border.width: PanelStyle.panelBorderWidth
+            border.color: PanelStyle.panelBorderColor
         }
 
         ColumnLayout {
             id: content
             anchors.fill: parent
-            anchors.margins: 20
-            spacing: 10
+            anchors.margins: PanelStyle.panelPadding
+            spacing: PanelStyle.panelSpacing
 
             // --- HEADER ---
             RowLayout {
@@ -422,9 +423,9 @@ PanelWindow {
                 Rectangle {
                     implicitWidth: 28
                     implicitHeight: 28
-                    radius: 6
+                    radius: PanelStyle.buttonRadius
                     color: settingsMouse.containsMouse
-                           ? Qt.rgba(Theme.primary.r, Theme.primary.g, Theme.primary.b, 0.15)
+                           ? PanelStyle.fillHover
                            : "transparent"
 
                     ToolTip.visible: settingsMouse.containsMouse
@@ -463,7 +464,7 @@ PanelWindow {
 
             ColumnLayout {
                 Layout.fillWidth: true
-                spacing: 2
+                spacing: Tokens.space.xxs
 
                 Repeater {
                     model: root.sinks
@@ -495,7 +496,7 @@ PanelWindow {
 
             ColumnLayout {
                 Layout.fillWidth: true
-                spacing: 2
+                spacing: Tokens.space.xxs
                 visible: root.sources.length > 0
 
                 Repeater {
@@ -521,7 +522,7 @@ PanelWindow {
 
             ColumnLayout {
                 Layout.fillWidth: true
-                spacing: 10
+                spacing: PanelStyle.panelSpacing
                 visible: root.streams.length > 0
 
                 Repeater {
@@ -529,7 +530,7 @@ PanelWindow {
                     ColumnLayout {
                         required property var modelData
                         Layout.fillWidth: true
-                        spacing: 2
+                        spacing: Tokens.space.xxs
 
                         Text {
                             Layout.fillWidth: true
@@ -555,7 +556,7 @@ PanelWindow {
             RowLayout {
                 Layout.fillWidth: true
                 visible: !!root.effects.available
-                spacing: 10
+                spacing: PanelStyle.panelSpacing
 
                 SectionLabel { Layout.fillWidth: true; text: "Easy Effects" }
 
@@ -586,9 +587,9 @@ PanelWindow {
                 Rectangle {
                     implicitWidth: 24
                     implicitHeight: 24
-                    radius: 6
+                    radius: PanelStyle.buttonRadius
                     color: eeMouse.containsMouse
-                           ? Qt.rgba(Theme.primary.r, Theme.primary.g, Theme.primary.b, 0.15)
+                           ? PanelStyle.fillHover
                            : "transparent"
 
                     ToolTip.visible: eeMouse.containsMouse
@@ -617,12 +618,12 @@ PanelWindow {
                 font.family: Theme.fontFamily
                 font.pixelSize: 11
                 color: Theme.outline
-                leftPadding: 8
+                leftPadding: Tokens.space.md
             }
 
             ColumnLayout {
                 Layout.fillWidth: true
-                spacing: 2
+                spacing: Tokens.space.xxs
                 visible: !!root.effects.available && !!root.effects.running
 
                 Repeater {

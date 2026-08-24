@@ -5,6 +5,7 @@ import QtQuick
 import QtQuick.Layouts
 import QtQuick.Effects
 import qs.CustomTheme
+import qs.Panels
 
 // The popups that replace the ones swaync used to draw.
 //
@@ -103,10 +104,10 @@ PanelWindow {
         id: toastList
         anchors.bottom: parent.bottom
         anchors.right: parent.right
-        anchors.margins: 20
+        anchors.margins: PanelStyle.shadowMargin
         width: parent.width - 40
         height: Math.min(contentHeight, (root.screen ? root.screen.height : 1080) - 100)
-        spacing: 8
+        spacing: Tokens.space.md
         interactive: false
         // Newest is the highest index in `toastModel` (see syncToastModel);
         // the list itself still lays out top-to-bottom in index order, so
@@ -122,13 +123,13 @@ PanelWindow {
                 property: "x"
                 from: toastList.width
                 to: 0
-                duration: 250
+                duration: PanelStyle.animSlow
                 easing.type: Easing.OutQuint
             }
         }
 
         remove: Transition {
-            NumberAnimation { property: "opacity"; to: 0; duration: 160 }
+            NumberAnimation { property: "opacity"; to: 0; duration: PanelStyle.animNormal }
             NumberAnimation {
                 property: "x"
                 to: toastList.width
@@ -158,7 +159,7 @@ PanelWindow {
                 anchors.fill: toastCard
                 radius: toastCard.radius
                 blur: 15
-                color: Qt.rgba(Theme.shadow.r, Theme.shadow.g, Theme.shadow.b, 0.4)
+                color: PanelStyle.shadowColor
             }
 
             // Same card as the panel: translucent fill, hairline border, and
@@ -168,15 +169,15 @@ PanelWindow {
                 id: toastCard
                 width: parent.width
                 implicitHeight: toastEntry.implicitHeight + 4
-                radius: 10
-                color: Qt.rgba(Theme.background.r, Theme.background.g, Theme.background.b, 0.30)
-                border.width: 1
-                border.color: Qt.rgba(Theme.primary.r, Theme.primary.g, Theme.primary.b, 0.35)
+                radius: PanelStyle.panelRadius
+                color: PanelStyle.panelColor
+                border.width: PanelStyle.panelBorderWidth
+                border.color: PanelStyle.panelBorderColor
 
                 NotificationEntry {
                     id: toastEntry
                     anchors.fill: parent
-                    anchors.margins: 2
+                    anchors.margins: Tokens.space.xxs
                     notification: toast.notif
                     showBackground: false
                 }

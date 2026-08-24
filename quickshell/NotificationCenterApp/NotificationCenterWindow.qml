@@ -8,6 +8,7 @@ import QtQuick.Layouts
 import QtQuick.Controls
 import QtQuick.Effects
 import qs.CustomTheme
+import qs.Panels
 
 // The notification centre: clock, calendar, notifications, bottom right.
 //
@@ -87,7 +88,7 @@ PanelWindow {
 
     Behavior on currentBottomMargin {
         NumberAnimation {
-            duration: 350
+            duration: PanelStyle.animSlower
             easing.type: Easing.OutQuint
 
             // Unmap the window ONLY after the hide animation completely finishes
@@ -161,7 +162,7 @@ PanelWindow {
             color: pill.filled ? Theme.primary : "transparent"
             border.color: Theme.primary
             border.width: 1
-            radius: 8
+            radius: PanelStyle.controlRadius
         }
         contentItem: Text {
             text: pill.text
@@ -170,9 +171,9 @@ PanelWindow {
             color: pill.filled ? Theme.background : Theme.primary
             horizontalAlignment: Text.AlignHCenter
             verticalAlignment: Text.AlignVCenter
-            padding: 4
-            leftPadding: 10
-            rightPadding: 10
+            padding: Tokens.space.xs
+            leftPadding: Tokens.space.lg
+            rightPadding: Tokens.space.lg
         }
     }
 
@@ -252,14 +253,14 @@ PanelWindow {
     Item {
         id: card
         anchors.fill: parent
-        anchors.margins: 20
+        anchors.margins: PanelStyle.shadowMargin
         implicitHeight: content.implicitHeight + 40
 
         RectangularShadow {
             anchors.fill: mainBgRect
             radius: mainBgRect.radius
             blur: 15
-            color: Qt.rgba(Theme.shadow.r, Theme.shadow.g, Theme.shadow.b, 0.4)
+            color: PanelStyle.shadowColor
         }
 
         // --- CARD ---
@@ -281,17 +282,17 @@ PanelWindow {
         Rectangle {
             id: mainBgRect
             anchors.fill: parent
-            radius: 10
-            color: Qt.rgba(Theme.background.r, Theme.background.g, Theme.background.b, 0.30)
-            border.width: 1
-            border.color: Qt.rgba(Theme.primary.r, Theme.primary.g, Theme.primary.b, 0.35)
+            radius: PanelStyle.panelRadius
+            color: PanelStyle.panelColor
+            border.width: PanelStyle.panelBorderWidth
+            border.color: PanelStyle.panelBorderColor
         }
 
         ColumnLayout {
             id: content
             anchors.fill: parent
-            anchors.margins: 20
-            spacing: 14
+            anchors.margins: PanelStyle.panelPadding
+            spacing: Tokens.space.xxl
 
             // ---------- CLOCK ----------
             ColumnLayout {
@@ -319,7 +320,7 @@ PanelWindow {
                 }
             }
 
-            Rectangle { Layout.fillWidth: true; implicitHeight: 1; color: Theme.primary; opacity: 0.3 }
+            Rectangle { Layout.fillWidth: true; implicitHeight: 1; color: Theme.primary; opacity: PanelStyle.dividerAlpha }
 
             // ---------- CALENDAR ----------
             Item {
@@ -359,7 +360,7 @@ PanelWindow {
                     opacity: (currentMonth !== todayMonth || currentYear !== todayYear) ? 1.0 : 0.0
                     enabled: opacity > 0
 
-                    Behavior on opacity { NumberAnimation { duration: 250; easing.type: Easing.InOutQuad } }
+                    Behavior on opacity { NumberAnimation { duration: PanelStyle.animSlow; easing.type: Easing.InOutQuad } }
 
                     onClicked: {
                         currentMonth = todayMonth;
@@ -372,12 +373,12 @@ PanelWindow {
             RowLayout {
                 Layout.fillWidth: true
                 Layout.preferredHeight: 230
-                spacing: 12
+                spacing: Tokens.space.xl
 
                 ColumnLayout {
                     Layout.fillHeight: true
                     Layout.preferredWidth: 24
-                    spacing: 4
+                    spacing: Tokens.space.xs
 
                     Text {
                         Layout.fillWidth: true
@@ -388,7 +389,7 @@ PanelWindow {
                         font.pixelSize: 12
                         font.bold: true
                         horizontalAlignment: Text.AlignHCenter
-                        Layout.bottomMargin: 4
+                        Layout.bottomMargin: Tokens.space.xs
                     }
 
                     Repeater {
@@ -407,12 +408,12 @@ PanelWindow {
                     }
                 }
 
-                Rectangle { Layout.fillHeight: true; implicitWidth: 1; color: Theme.primary; opacity: 0.3 }
+                Rectangle { Layout.fillHeight: true; implicitWidth: 1; color: Theme.primary; opacity: PanelStyle.dividerAlpha }
 
                 ColumnLayout {
                     Layout.fillWidth: true
                     Layout.fillHeight: true
-                    spacing: 4
+                    spacing: Tokens.space.xs
 
                     RowLayout {
                         Layout.fillWidth: true
@@ -461,12 +462,12 @@ PanelWindow {
                 }
             }
 
-            Rectangle { Layout.fillWidth: true; implicitHeight: 1; color: Theme.primary; opacity: 0.3 }
+            Rectangle { Layout.fillWidth: true; implicitHeight: 1; color: Theme.primary; opacity: PanelStyle.dividerAlpha }
 
             // ---------- NOTIFICATIONS ----------
             RowLayout {
                 Layout.fillWidth: true
-                spacing: 8
+                spacing: Tokens.space.md
 
                 Text {
                     text: "Notifications"
@@ -480,7 +481,7 @@ PanelWindow {
                     visible: NotificationState.count > 0
                     text: NotificationState.count
                     color: Theme.on_background
-                    opacity: 0.6
+                    opacity: Tokens.opacity.textDim
                     font.family: Theme.fontFamily
                     font.pixelSize: 13
                 }
@@ -505,8 +506,8 @@ PanelWindow {
             // the last notification is cleared, which reads as a bug.
             Text {
                 Layout.fillWidth: true
-                Layout.topMargin: 8
-                Layout.bottomMargin: 8
+                Layout.topMargin: Tokens.space.md
+                Layout.bottomMargin: Tokens.space.md
                 visible: NotificationState.count === 0
                 text: NotificationState.dnd ? "No notifications · DND on" : "No notifications"
                 color: Theme.on_background
@@ -524,7 +525,7 @@ PanelWindow {
                 // panel from running off the top of the screen.
                 Layout.preferredHeight: Math.min(contentHeight, 320)
                 clip: true
-                spacing: 8
+                spacing: Tokens.space.md
                 model: NotificationState.list
                 boundsBehavior: Flickable.StopAtBounds
 

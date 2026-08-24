@@ -18,6 +18,7 @@ import QtQuick.Layouts
 import QtQuick.Controls
 import QtQuick.Effects
 import qs.CustomTheme
+import qs.Panels
 
 PanelWindow {
     id: root
@@ -60,7 +61,7 @@ PanelWindow {
 
     Behavior on currentBottomMargin {
         NumberAnimation {
-            duration: 350
+            duration: PanelStyle.animSlower
             easing.type: Easing.OutQuint
             onRunningChanged: if (!running && !root.isOpen) root.showWindow = false
         }
@@ -168,14 +169,14 @@ PanelWindow {
         font.capitalization: Font.AllUppercase
         font.letterSpacing: 1
         color: Theme.outline
-        Layout.topMargin: 4
+        Layout.topMargin: Tokens.space.xs
     }
 
     component Divider: Rectangle {
         Layout.fillWidth: true
         implicitHeight: 1
         color: Theme.primary
-        opacity: 0.3
+        opacity: PanelStyle.dividerAlpha
     }
 
     // A label/value line in the detail blocks. Hides itself when the value is
@@ -186,7 +187,7 @@ PanelWindow {
         property string value: ""
 
         Layout.fillWidth: true
-        spacing: 8
+        spacing: Tokens.space.md
         visible: value !== "" && value !== "undefined" && value !== "null"
 
         Text {
@@ -195,7 +196,7 @@ PanelWindow {
             font.pixelSize: 11
             color: Theme.outline
             Layout.preferredWidth: 76
-            leftPadding: 8
+            leftPadding: Tokens.space.md
         }
 
         Text {
@@ -215,18 +216,18 @@ PanelWindow {
 
         implicitWidth: 40
         implicitHeight: 22
-        radius: 100
-        color: checked ? Theme.primary : Qt.rgba(Theme.on_surface.r, Theme.on_surface.g, Theme.on_surface.b, 0.25)
-        Behavior on color { ColorAnimation { duration: 150 } }
+        radius: Tokens.radius.full
+        color: checked ? Theme.primary : Qt.rgba(Theme.on_surface.r, Theme.on_surface.g, Theme.on_surface.b, Tokens.opacity.separator)
+        Behavior on color { ColorAnimation { duration: PanelStyle.animNormal } }
 
         Rectangle {
             width: 16
             height: 16
-            radius: 100
+            radius: Tokens.radius.full
             color: tgl.checked ? Theme.on_primary : Theme.background
             anchors.verticalCenter: parent.verticalCenter
             x: tgl.checked ? parent.width - width - 3 : 3
-            Behavior on x { NumberAnimation { duration: 150; easing.type: Easing.OutCubic } }
+            Behavior on x { NumberAnimation { duration: PanelStyle.animNormal; easing.type: Easing.OutCubic } }
         }
 
         MouseArea {
@@ -241,13 +242,13 @@ PanelWindow {
     // ==========================================
     Item {
         anchors.fill: parent
-        anchors.margins: 20
+        anchors.margins: PanelStyle.shadowMargin
 
         RectangularShadow {
             anchors.fill: mainBgRect
             radius: mainBgRect.radius
             blur: 15
-            color: Qt.rgba(Theme.shadow.r, Theme.shadow.g, Theme.shadow.b, 0.4)
+            color: PanelStyle.shadowColor
         }
 
         // One rectangle: translucent fill, solid hairline border. A gradient
@@ -259,22 +260,22 @@ PanelWindow {
         Rectangle {
             id: mainBgRect
             anchors.fill: parent
-            radius: 10
-            color: Qt.rgba(Theme.background.r, Theme.background.g, Theme.background.b, 0.30)
-            border.width: 1
-            border.color: Qt.rgba(Theme.primary.r, Theme.primary.g, Theme.primary.b, 0.35)
+            radius: PanelStyle.panelRadius
+            color: PanelStyle.panelColor
+            border.width: PanelStyle.panelBorderWidth
+            border.color: PanelStyle.panelBorderColor
         }
 
         ColumnLayout {
             id: content
             anchors.fill: parent
-            anchors.margins: 20
-            spacing: 10
+            anchors.margins: PanelStyle.panelPadding
+            spacing: PanelStyle.panelSpacing
 
             // --- HEADER ---
             RowLayout {
                 Layout.fillWidth: true
-                spacing: 10
+                spacing: PanelStyle.panelSpacing
 
                 Text {
                     Layout.fillWidth: true
@@ -294,9 +295,9 @@ PanelWindow {
                 Rectangle {
                     implicitWidth: 28
                     implicitHeight: 28
-                    radius: 6
+                    radius: PanelStyle.buttonRadius
                     color: settingsMouse.containsMouse
-                           ? Qt.rgba(Theme.primary.r, Theme.primary.g, Theme.primary.b, 0.15)
+                           ? PanelStyle.fillHover
                            : "transparent"
 
                     ToolTip.visible: settingsMouse.containsMouse
@@ -328,7 +329,7 @@ PanelWindow {
 
             ColumnLayout {
                 Layout.fillWidth: true
-                spacing: 2
+                spacing: Tokens.space.xxs
                 visible: root.wiredDevices.length > 0
 
                 Repeater {
@@ -337,18 +338,18 @@ PanelWindow {
                     RowLayout {
                         required property var modelData
                         Layout.fillWidth: true
-                        spacing: 10
+                        spacing: PanelStyle.panelSpacing
 
                         Glyph {
                             text: "lan"
                             font.pixelSize: 18
                             color: modelData.connected ? Theme.primary : Theme.outline
-                            leftPadding: 8
+                            leftPadding: Tokens.space.md
                         }
 
                         ColumnLayout {
                             Layout.fillWidth: true
-                            spacing: 0
+                            spacing: Tokens.space.none
 
                             Text {
                                 text: modelData.name
@@ -410,12 +411,12 @@ PanelWindow {
                 font.family: Theme.fontFamily
                 font.pixelSize: 12
                 color: Theme.outline
-                leftPadding: 8
+                leftPadding: Tokens.space.md
             }
 
             ColumnLayout {
                 Layout.fillWidth: true
-                spacing: 2
+                spacing: Tokens.space.xxs
                 visible: root.wifiDevice !== null && Networking.wifiEnabled
 
                 Repeater {
@@ -425,23 +426,23 @@ PanelWindow {
                         id: netEntry
                         required property var modelData
                         Layout.fillWidth: true
-                        spacing: 0
+                        spacing: Tokens.space.none
 
                         readonly property bool pskOpen: root.pskFor === modelData
 
                         Rectangle {
                             Layout.fillWidth: true
                             implicitHeight: 36
-                            radius: 6
+                            radius: PanelStyle.buttonRadius
                             color: netMouse.containsMouse
-                                   ? Qt.rgba(Theme.primary.r, Theme.primary.g, Theme.primary.b, 0.12)
+                                   ? PanelStyle.fillHover
                                    : "transparent"
 
                             RowLayout {
                                 anchors.fill: parent
-                                anchors.leftMargin: 8
-                                anchors.rightMargin: 8
-                                spacing: 10
+                                anchors.leftMargin: Tokens.space.md
+                                anchors.rightMargin: Tokens.space.md
+                                spacing: PanelStyle.panelSpacing
 
                                 Glyph {
                                     text: "wifi"
@@ -495,7 +496,7 @@ PanelWindow {
                             MouseArea {
                                 id: netMouse
                                 anchors.fill: parent
-                                anchors.rightMargin: 26
+                                anchors.rightMargin: Tokens.space.gutter
                                 hoverEnabled: true
                                 cursorShape: Qt.PointingHandCursor
                                 onClicked: {
@@ -518,20 +519,20 @@ PanelWindow {
                         // network NetworkManager has no saved secret for.
                         Rectangle {
                             Layout.fillWidth: true
-                            Layout.leftMargin: 8
-                            Layout.rightMargin: 8
-                            Layout.topMargin: 4
-                            Layout.bottomMargin: 4
+                            Layout.leftMargin: Tokens.space.md
+                            Layout.rightMargin: Tokens.space.md
+                            Layout.topMargin: Tokens.space.xs
+                            Layout.bottomMargin: Tokens.space.xs
                             implicitHeight: netEntry.pskOpen ? 32 : 0
                             visible: netEntry.pskOpen
-                            radius: 6
-                            color: Qt.rgba(Theme.on_surface.r, Theme.on_surface.g, Theme.on_surface.b, 0.08)
+                            radius: PanelStyle.buttonRadius
+                            color: PanelStyle.fillSubtle
 
                             RowLayout {
                                 anchors.fill: parent
-                                anchors.leftMargin: 8
-                                anchors.rightMargin: 6
-                                spacing: 6
+                                anchors.leftMargin: Tokens.space.md
+                                anchors.rightMargin: Tokens.space.sm
+                                spacing: Tokens.space.sm
 
                                 TextInput {
                                     id: pskField
@@ -589,7 +590,7 @@ PanelWindow {
                 font.family: Theme.fontFamily
                 font.pixelSize: 11
                 color: Theme.outline
-                leftPadding: 8
+                leftPadding: Tokens.space.md
             }
 
             // --- CONNECTION DETAILS ---
@@ -631,7 +632,7 @@ PanelWindow {
             RowLayout {
                 Layout.fillWidth: true
                 visible: root.details.tailscale !== undefined && root.details.tailscale !== null
-                spacing: 10
+                spacing: PanelStyle.panelSpacing
 
                 SectionLabel { Layout.fillWidth: true; text: "Tailscale" }
 
