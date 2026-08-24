@@ -41,6 +41,7 @@ Now there is one number and one place to change it.
 | `SliderRow.qml` | marker · slider · readout |
 | `ActionButton.qml` | small glyph-and-label button, `destructive` variant |
 | `Glyph.qml` / `FaGlyph.qml` | Material Icons Round / Font Awesome at weight 900 |
+| `Sparkline.qml` | small filled-line history graph from a rolling sample array — network throughput today, CPU/RAM later |
 
 **`PanelStyle` is not a palette.** Colours still come from `Theme` (Matugen,
 i.e. the wallpaper). What lives here is how those colours are *used* — which

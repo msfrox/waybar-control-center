@@ -42,6 +42,15 @@ def run(args, timeout=10):
         return ""
 
 
+def run_ok(args, timeout=10):
+    """Like run(), but reports success/failure instead of stdout - setvcp has
+    no output to inspect on success, so a truthy string can't tell the two apart."""
+    try:
+        return subprocess.run(args, capture_output=True, text=True, timeout=timeout).returncode == 0
+    except Exception:
+        return False
+
+
 # --------------------------------------------------------------------------
 # internal panel
 # --------------------------------------------------------------------------
@@ -133,9 +142,24 @@ def external_get(redetect=False):
 def external_set(percent):
     if not shutil.which("ddcutil"):
         return
-    for bus in cached_buses():
-        run(["ddcutil", "--bus", bus, "setvcp", VCP_BRIGHTNESS,
-             str(max(0, min(100, percent)))], timeout=10)
+    value = str(max(0, min(100, percent)))
+    buses = cached_buses()
+
+    # The cached bus number is only a guess once it's more than one session
+    # old - a reboot, a monitor replug, or a DP-MST re-enumeration can all
+    # renumber the I2C bus ddcutil sees, and unlike getvcp there is no reading
+    # to fall back on to notice that: a write to a stale bus just does
+    # nothing. cosmic-ddc-brightness sidesteps this entirely by running
+    # `ddcutil detect` fresh on every call; this keeps the cache (detect is a
+    # ~second-long sweep) but verifies the write actually landed and
+    # redetects once before giving up, rather than failing silently forever.
+    ok = bool(buses) and all(
+        run_ok(["ddcutil", "--bus", bus, "setvcp", VCP_BRIGHTNESS, value])
+        for bus in buses)
+
+    if not ok:
+        for bus in cached_buses(redetect=True):
+            run_ok(["ddcutil", "--bus", bus, "setvcp", VCP_BRIGHTNESS, value])
 
 
 if __name__ == "__main__":

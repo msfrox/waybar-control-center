@@ -1054,30 +1054,17 @@ PanelWindow {
                                     ? root.humanBytes(root.stats.memory.swap_used) : ""
                         }
 
-                        // Three per row. Four across ~380px left each about 90px
-                        // and "118 KB/s" plus its icon ran into its neighbour;
-                        // three is the most that still fits a rate string.
+                        // Four per row. Down/Up moved to the Network menu
+                        // (they're throughput readouts, not system stats), so
+                        // Temp/Uptime/Fan1/Fan2 are the whole set now and all
+                        // four fit one row without a rate string forcing a
+                        // narrower grid.
                         GridLayout {
                             Layout.fillWidth: true
                             Layout.topMargin: Tokens.space.xs
-                            // Three wide: Down and Up still land side by side on
-                            // the first row, and the two fans fill the second
-                            // instead of leaving a hole.
-                            columns: 3
-                            rowSpacing: Tokens.space.sm
-                            columnSpacing: Tokens.space.sm
-
-                            InfoPill {
-                                glyph: "download"
-                                value: root.stats.network ? root.humanRate(root.stats.network.rx_rate) : "—"
-                                caption: "Down"
-                            }
-
-                            InfoPill {
-                                glyph: "upload"
-                                value: root.stats.network ? root.humanRate(root.stats.network.tx_rate) : "—"
-                                caption: "Up"
-                            }
+                            columns: 4
+                            rowSpacing: Tokens.space.xs
+                            columnSpacing: Tokens.space.xs
 
                             InfoPill {
                                 glyph: "device_thermostat"
@@ -1153,9 +1140,9 @@ PanelWindow {
                         GridLayout {
                             id: quickGrid
                             Layout.fillWidth: true
-                            columns: 4
-                            rowSpacing: Tokens.space.sm
-                            columnSpacing: Tokens.space.sm
+                            columns: 5
+                            rowSpacing: Tokens.space.xs
+                            columnSpacing: Tokens.space.xs
 
                             // The first four are the toggles a notification
                             // panel's own buttons-grid usually carries, so the

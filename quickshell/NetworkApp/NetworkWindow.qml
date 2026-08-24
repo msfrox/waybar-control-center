@@ -118,6 +118,68 @@ PanelWindow {
         onTriggered: if (!detailsProc.running) detailsProc.running = true
     }
 
+    // --- THROUGHPUT ---
+    //
+    // Own Process and its own, faster tick, deliberately separate from the
+    // details poll above: network-throughput.py is a couple of /proc file
+    // reads with no subprocess, cheap enough for a 2s tick that makes the
+    // graph actually look like it's moving, where 5s exists specifically to
+    // keep the nmcli/tailscale calls infrequent. This used to be two InfoPills
+    // in the Control Center's System section (Down/Up rate only, no totals,
+    // no history) - moved here because throughput is a network fact, not a
+    // system one, and gained the totals/peak/graph the pills never had room for.
+    property var throughput: ({})
+
+    Process {
+        id: throughputProc
+        command: [Quickshell.env("HOME") + "/.config/brilliant/providers/network-throughput.py"]
+        stdout: StdioCollector {
+            onStreamFinished: {
+                try {
+                    root.throughput = JSON.parse(this.text)
+                } catch (e) {
+                    root.throughput = {}
+                }
+            }
+        }
+    }
+
+    Timer {
+        interval: 2000
+        repeat: true
+        triggeredOnStart: true
+        running: root.isOpen
+        onTriggered: if (!throughputProc.running) throughputProc.running = true
+    }
+
+    // "" means auto: follow the backend's default-route pick (root.throughput.default)
+    // rather than pinning to whatever that happened to be on the first read, so
+    // it keeps tracking correctly through a wifi/ethernet handover. Picking an
+    // explicit interface (or "total") in the dropdown below overrides that.
+    property string selectedIface: ""
+    property bool ifaceMenuOpen: false
+
+    readonly property var throughputEntry: {
+        const byIface = root.throughput.by_iface || {}
+        const auto = root.throughput.default
+        const key = root.selectedIface !== "" ? root.selectedIface
+                  : (auto && byIface[auto] ? auto : "total")
+        return byIface[key] || {}
+    }
+
+    function humanBytes(bytes) {
+        if (bytes === null || bytes === undefined) return "—"
+        const units = ["B", "KB", "MB", "GB", "TB"]
+        let value = bytes, i = 0
+        while (value >= 1024 && i < units.length - 1) { value /= 1024; i++ }
+        return (value >= 10 || i === 0 ? Math.round(value) : value.toFixed(1)) + " " + units[i]
+    }
+
+    function humanRate(bytesPerSecond) {
+        if (bytesPerSecond === null || bytesPerSecond === undefined) return "—"
+        return root.humanBytes(bytesPerSecond) + "/s"
+    }
+
     // --- NETWORKMANAGER ---
     readonly property var devices: Networking.devices ? Networking.devices.values : []
     readonly property var wifiDevice: devices.find(d => d.type === DeviceType.Wifi) || null
@@ -206,6 +268,55 @@ PanelWindow {
             font.pixelSize: 11
             color: Theme.on_surface
             elide: Text.ElideRight
+        }
+    }
+
+    // A throughput line: icon, direction, current rate, and a muted
+    // total/peak clause underneath - the same "value now, provenance
+    // underneath" shape DetailRow uses, with a bigger trailing number because
+    // this is the thing this section exists to show.
+    component ThroughputRow: RowLayout {
+        id: trow
+        required property string glyph
+        required property string label
+        property string value: "—"
+        property string note: ""
+
+        Layout.fillWidth: true
+        spacing: PanelStyle.panelSpacing
+
+        Glyph {
+            text: trow.glyph
+            font.pixelSize: 18
+            leftPadding: Tokens.space.md
+        }
+
+        ColumnLayout {
+            Layout.fillWidth: true
+            spacing: Tokens.space.none
+
+            Text {
+                text: trow.label
+                font.family: Theme.fontFamily
+                font.pixelSize: 11
+                color: Theme.outline
+            }
+
+            Text {
+                visible: trow.note !== ""
+                text: trow.note
+                font.family: Theme.fontFamily
+                font.pixelSize: 10
+                color: Theme.outline
+            }
+        }
+
+        Text {
+            text: trow.value
+            font.family: Theme.fontFamily
+            font.pixelSize: 13
+            font.bold: true
+            color: Theme.on_surface
         }
     }
 
@@ -315,6 +426,150 @@ PanelWindow {
                             Quickshell.execDetached(["nm-connection-editor"])
                             root.isOpen = false
                         }
+                    }
+                }
+            }
+
+            Divider {}
+
+            // --- THROUGHPUT ---
+            RowLayout {
+                Layout.fillWidth: true
+
+                SectionLabel { Layout.fillWidth: true; text: "Throughput" }
+
+                // The picker: current selection + a caret, expanding the
+                // option list below on click. A real dropdown rather than a
+                // row of chips - there's a "total" entry as well as one per
+                // interface, and that can grow past what a chip row reads
+                // well at (a machine with wifi, ethernet AND a VPN up).
+                Rectangle {
+                    id: ifacePicker
+                    implicitHeight: 22
+                    implicitWidth: pickerRow.implicitWidth + 16
+                    radius: PanelStyle.chipRadius
+                    color: pickerMouse.containsMouse || root.ifaceMenuOpen
+                           ? PanelStyle.fillHover : PanelStyle.fillSubtle
+
+                    RowLayout {
+                        id: pickerRow
+                        anchors.centerIn: parent
+                        spacing: 2
+
+                        Text {
+                            text: root.selectedIface === "" ? "Auto"
+                                : root.selectedIface === "total" ? "Total"
+                                : root.selectedIface
+                            font.family: Theme.fontFamily
+                            font.pixelSize: 10
+                            color: Theme.on_surface
+                        }
+
+                        Glyph {
+                            text: root.ifaceMenuOpen ? "expand_less" : "expand_more"
+                            font.pixelSize: 12
+                        }
+                    }
+
+                    MouseArea {
+                        id: pickerMouse
+                        anchors.fill: parent
+                        hoverEnabled: true
+                        cursorShape: Qt.PointingHandCursor
+                        onClicked: root.ifaceMenuOpen = !root.ifaceMenuOpen
+                    }
+                }
+            }
+
+            ColumnLayout {
+                Layout.fillWidth: true
+                spacing: Tokens.space.hairline
+                visible: root.ifaceMenuOpen
+
+                Repeater {
+                    // "Auto" first (follows the default route), then every
+                    // interface the backend is currently reading, then the
+                    // combined total last.
+                    model: [""].concat(root.throughput.interfaces || []).concat(["total"])
+
+                    Rectangle {
+                        id: ifaceOption
+                        required property string modelData
+                        readonly property bool current: modelData === root.selectedIface
+
+                        Layout.fillWidth: true
+                        implicitHeight: 22
+                        radius: PanelStyle.controlRadius
+                        color: optMouse.containsMouse ? PanelStyle.fillHover : "transparent"
+
+                        Text {
+                            anchors.verticalCenter: parent.verticalCenter
+                            anchors.left: parent.left
+                            anchors.leftMargin: Tokens.space.md
+                            text: ifaceOption.modelData === "" ? "Auto (default route)"
+                                : ifaceOption.modelData === "total" ? "Total (all interfaces)"
+                                : ifaceOption.modelData
+                            font.family: Theme.fontFamily
+                            font.pixelSize: 11
+                            color: ifaceOption.current ? Theme.primary : Theme.on_surface
+                        }
+
+                        MouseArea {
+                            id: optMouse
+                            anchors.fill: parent
+                            hoverEnabled: true
+                            cursorShape: Qt.PointingHandCursor
+                            onClicked: {
+                                root.selectedIface = ifaceOption.modelData
+                                root.ifaceMenuOpen = false
+                            }
+                        }
+                    }
+                }
+            }
+
+            ColumnLayout {
+                Layout.fillWidth: true
+                spacing: Tokens.space.xxs
+
+                ThroughputRow {
+                    glyph: "download"
+                    label: "Down"
+                    value: root.humanRate(root.throughputEntry.rx_rate)
+                    note: "Total " + root.humanBytes(root.throughputEntry.rx_total)
+                          + "  ·  Top " + root.humanRate(root.throughputEntry.top_rx)
+                }
+
+                ThroughputRow {
+                    glyph: "upload"
+                    label: "Up"
+                    value: root.humanRate(root.throughputEntry.tx_rate)
+                    note: "Total " + root.humanBytes(root.throughputEntry.tx_total)
+                          + "  ·  Top " + root.humanRate(root.throughputEntry.top_tx)
+                }
+
+                // Both series autoscale independently (Sparkline's default),
+                // which is the right call here: sharing one scale would let a
+                // single big download burst flatten the upload trace to
+                // nothing, and this is a "is it moving" glance, not a graph
+                // anyone is reading absolute values off.
+                Item {
+                    Layout.fillWidth: true
+                    Layout.preferredHeight: 32
+                    Layout.topMargin: Tokens.space.xs
+                    Layout.leftMargin: Tokens.space.md
+                    Layout.rightMargin: Tokens.space.md
+
+                    Sparkline {
+                        anchors.fill: parent
+                        samples: root.throughputEntry.history ? root.throughputEntry.history.rx : []
+                        lineColor: Theme.primary
+                    }
+
+                    Sparkline {
+                        anchors.fill: parent
+                        samples: root.throughputEntry.history ? root.throughputEntry.history.tx : []
+                        lineColor: Theme.tertiary
                     }
                 }
             }
