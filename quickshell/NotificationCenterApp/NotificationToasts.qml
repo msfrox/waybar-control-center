@@ -9,11 +9,18 @@ import qs.Panels
 
 // The popups that replace the ones swaync used to draw.
 //
-// Bottom right, matching NotificationCenterWindow — the panel this is telling
-// you to open already lives there ("45px clears the 55px bar by ~10px" is
-// that file's own measurement, reused here verbatim). A toast that ARRIVES
-// grows the stack upward from that fixed bottom edge, newest nearest the
-// corner, exactly the way the panel itself grows.
+// Default is bottom right, matching NotificationCenterWindow — the panel
+// this is telling you to open already lives there ("45px clears the 55px
+// bar by ~10px" is that file's own measurement, reused here verbatim). A
+// toast that ARRIVES grows the stack upward from that fixed bottom edge,
+// newest nearest the corner, exactly the way the panel itself grows.
+//
+// Position, animation and font are configurable on hyprsys' Notifications
+// page (`NotificationState.position`/`animation`/`font`, read live from
+// `~/.config/hyprbar/notifications.json` there) — see this file's `row`/
+// `col` below for how one of 9 positions maps to anchors, and `animDuration`/
+// `doSlide`/`doScale` for how "fade"/"slide"/"scale"/"none" map to the
+// add/remove transitions further down.
 //
 // This window is always mapped but input-masked to the toasts themselves, so
 // the empty area above the stack stays click-through.
@@ -28,9 +35,25 @@ PanelWindow {
     // whatever is being typed into.
     WlrLayershell.keyboardFocus: WlrKeyboardFocus.None
 
+    // --- POSITION: one of 9 values, default bottom-right -----------------
+    function toastRow(pos: string): string {
+        if (pos.startsWith("top")) return "top"
+        if (pos.startsWith("bottom")) return "bottom"
+        return "middle"        // "middle-left" / "middle-right" / "center"
+    }
+    function toastCol(pos: string): string {
+        if (pos.endsWith("left")) return "left"
+        if (pos.endsWith("right")) return "right"
+        return "center"        // "top-center" / "bottom-center" / "center"
+    }
+    readonly property string row: root.toastRow(NotificationState.position)
+    readonly property string col: root.toastCol(NotificationState.position)
+
     anchors {
-        bottom: true
-        right: true
+        top: root.row === "top"
+        bottom: root.row === "bottom"
+        left: root.col === "left"
+        right: root.col === "right"
     }
 
     implicitWidth: 400
@@ -42,9 +65,40 @@ PanelWindow {
     // Only the cards take clicks; the gaps between them and the space above do not.
     mask: Region { item: toastList }
 
+    //: 45/0 (bottom/right) is the ORIGINAL hardcoded pair, kept verbatim so
+    //: the default position looks pixel-identical to before this batch.
+    //: `edgeGutter` is the new, generic gutter every other row/col combo
+    //: uses — this repo has no live signal for where the bar itself sits
+    //: (top vs bottom), so a toast anchored to a top position on a
+    //: top-bar setup may want more clearance than this; flagged, not
+    //: solved, here.
+    readonly property int barClearance: 45
+    readonly property int edgeGutter: 12
     margins {
-        bottom: 45
-        right: 0
+        top: root.row === "top" ? root.edgeGutter : 0
+        bottom: root.row === "bottom" ? root.barClearance : 0
+        left: root.col === "left" ? root.edgeGutter : 0
+        right: root.col === "right" ? 0 : 0
+    }
+
+    // --- ANIMATION: fade / slide / scale / none ---------------------------
+    readonly property bool animOn: NotificationState.animation !== "none"
+    readonly property int animDuration: root.animOn ? 220 : 0
+    readonly property bool doSlide: NotificationState.animation === "slide"
+    readonly property bool doScale: NotificationState.animation === "scale"
+
+    // Slide direction follows whichever edge the toast is anchored to —
+    // horizontal for a left/right column, vertical for the center column
+    // (top/bottom row, or straight down for a fully-centered toast).
+    function slideOffsetX(): real {
+        if (!root.doSlide) return 0
+        if (root.col === "left") return -toastList.width
+        if (root.col === "right") return toastList.width
+        return 0
+    }
+    function slideOffsetY(): real {
+        if (!root.doSlide || root.col !== "center") return 0
+        return root.row === "top" ? -80 : 80
     }
 
     // --- KEEPING A REAL, INCREMENTALLY-UPDATED MODEL ---
@@ -102,38 +156,79 @@ PanelWindow {
 
     ListView {
         id: toastList
-        anchors.bottom: parent.bottom
-        anchors.right: parent.right
+        // Pinned to whichever edge(s) the window itself is anchored to
+        // (see `root.row`/`root.col` above) — the vertical pin is what lets
+        // the stack grow away from the corner as more toasts arrive; see
+        // `verticalLayoutDirection` below for how "which end is newest"
+        // flips between a top and a bottom row.
+        anchors.top: root.row === "top" ? parent.top : undefined
+        anchors.bottom: root.row === "bottom" ? parent.bottom : undefined
+        // "middle" (middle-left/middle-right/center) has no top/bottom pin
+        // at all -- vertically center instead, or the list would default to
+        // the parent's top-left origin.
+        anchors.verticalCenter: root.row === "middle" ? parent.verticalCenter : undefined
+        anchors.left: root.col === "left" ? parent.left : undefined
+        anchors.right: root.col === "right" ? parent.right : undefined
+        anchors.horizontalCenter: root.col === "center" ? parent.horizontalCenter : undefined
         anchors.margins: PanelStyle.shadowMargin
         width: parent.width - 40
         height: Math.min(contentHeight, (root.screen ? root.screen.height : 1080) - 100)
         spacing: Tokens.space.md
         interactive: false
-        // Newest is the highest index in `toastModel` (see syncToastModel);
-        // the list itself still lays out top-to-bottom in index order, so
-        // pinning the LIST's bottom edge is what puts the newest row nearest
-        // the corner and lets the stack grow upward as more arrive.
-        verticalLayoutDirection: ListView.TopToBottom
+        // Newest is the highest index in `toastModel` (see syncToastModel).
+        // For a bottom-anchored row, pinning the LIST's bottom edge (above)
+        // plus normal top-to-bottom layout puts the newest row nearest the
+        // corner and lets the stack grow upward as more arrive. For a
+        // top-anchored row that has to mirror: BottomToTop layout puts index
+        // 0 (oldest) at the list's own visual bottom and the newest nearest
+        // the pinned top edge instead, with the stack growing downward.
+        verticalLayoutDirection: root.row === "top" ? ListView.BottomToTop : ListView.TopToBottom
 
         model: toastModel
 
         add: Transition {
-            NumberAnimation { property: "opacity"; from: 0; to: 1; duration: 220 }
+            NumberAnimation { property: "opacity"; from: 0; to: 1; duration: root.animDuration }
             NumberAnimation {
                 property: "x"
-                from: toastList.width
+                from: root.slideOffsetX()
                 to: 0
-                duration: PanelStyle.animSlow
+                duration: root.doSlide ? PanelStyle.animSlow : 0
                 easing.type: Easing.OutQuint
+            }
+            NumberAnimation {
+                property: "y"
+                from: root.slideOffsetY()
+                to: 0
+                duration: root.doSlide ? PanelStyle.animSlow : 0
+                easing.type: Easing.OutQuint
+            }
+            NumberAnimation {
+                property: "scale"
+                from: root.doScale ? 0.8 : 1
+                to: 1
+                duration: root.doScale ? PanelStyle.animSlow : 0
+                easing.type: Easing.OutBack
             }
         }
 
         remove: Transition {
-            NumberAnimation { property: "opacity"; to: 0; duration: PanelStyle.animNormal }
+            NumberAnimation { property: "opacity"; to: 0; duration: root.animDuration }
             NumberAnimation {
                 property: "x"
-                to: toastList.width
-                duration: 200
+                to: root.slideOffsetX()
+                duration: root.doSlide ? 200 : 0
+                easing.type: Easing.InQuint
+            }
+            NumberAnimation {
+                property: "y"
+                to: root.slideOffsetY()
+                duration: root.doSlide ? 200 : 0
+                easing.type: Easing.InQuint
+            }
+            NumberAnimation {
+                property: "scale"
+                to: root.doScale ? 0.8 : 1
+                duration: root.doScale ? 200 : 0
                 easing.type: Easing.InQuint
             }
         }
@@ -142,8 +237,9 @@ PanelWindow {
         // SNAPS into its new slot instead of sliding — the other half of the
         // "jagged mess" complaint, since two toasts arriving close together
         // would still have every survivor teleport once each new one landed.
+        // Skipped (duration 0) when "none" is selected, same as add/remove.
         displaced: Transition {
-            NumberAnimation { properties: "x,y"; duration: 200; easing.type: Easing.OutCubic }
+            NumberAnimation { properties: "x,y"; duration: root.animOn ? 200 : 0; easing.type: Easing.OutCubic }
         }
 
         delegate: Item {
@@ -180,6 +276,7 @@ PanelWindow {
                     anchors.margins: Tokens.space.xxs
                     notification: toast.notif
                     showBackground: false
+                    fontOverride: NotificationState.font
                 }
             }
 

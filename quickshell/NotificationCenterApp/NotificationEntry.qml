@@ -17,6 +17,12 @@ Rectangle {
     required property var notification
     // Toasts sit on their own translucent card and want no second background.
     property bool showBackground: true
+    // "" (the default, used by the panel list) means "no override" — Toasts
+    // pass `NotificationState.font` here, letting the toast surface's font
+    // choice (hyprsys' Notifications page) apply without touching how a
+    // notification reads in the persistent panel.
+    property string fontOverride: ""
+    readonly property string effectiveFont: entry.fontOverride !== "" ? entry.fontOverride : Theme.fontFamily
 
     implicitHeight: layout.implicitHeight + 20
     radius: PanelStyle.controlRadius
@@ -75,7 +81,7 @@ Rectangle {
                     text: entry.notification.appName
                     color: Theme.primary
                     opacity: 0.8
-                    font.family: Theme.fontFamily
+                    font.family: entry.effectiveFont
                     font.pixelSize: 11
                     elide: Text.ElideRight
                     Layout.maximumWidth: 160
@@ -86,7 +92,7 @@ Rectangle {
                     visible: text !== ""
                     color: Theme.on_background
                     opacity: 0.45
-                    font.family: Theme.fontFamily
+                    font.family: entry.effectiveFont
                     font.pixelSize: 11
                 }
 
@@ -123,7 +129,7 @@ Rectangle {
                 text: entry.notification.summary
                 visible: text !== ""
                 color: Theme.on_background
-                font.family: Theme.fontFamily
+                font.family: entry.effectiveFont
                 font.pixelSize: 13
                 font.bold: true
                 wrapMode: Text.WordWrap
@@ -137,7 +143,7 @@ Rectangle {
                 visible: text !== ""
                 color: Theme.on_background
                 opacity: 0.75
-                font.family: Theme.fontFamily
+                font.family: entry.effectiveFont
                 font.pixelSize: 12
                 // The server advertises body markup, so senders may use Pango.
                 textFormat: Text.RichText
@@ -167,7 +173,7 @@ Rectangle {
                         }
                         contentItem: Text {
                             text: modelData.text
-                            font.family: Theme.fontFamily
+                            font.family: entry.effectiveFont
                             font.pixelSize: 11
                             color: Theme.primary
                             horizontalAlignment: Text.AlignHCenter

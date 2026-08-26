@@ -253,6 +253,19 @@ Singleton {
         }
     }
 
+    // --- TOAST STYLE (position/animation/font) --------------------------------
+    // Configured on hyprsys' Notifications page, under the unprefixed
+    // position/animation/font keys — hyprbar's OSD toast primitive
+    // (OsdWindow.qml) has its OWN independent position/animation/font/timeout
+    // under a `toast*` prefix in the SAME file; the two surfaces are
+    // deliberately not aliases of each other. Defaults here match
+    // NotificationToasts.qml's ORIGINAL hardcoded look exactly: bottom-right,
+    // slide-in-from-the-right, no font override — so an install with no
+    // notifications.json yet looks exactly as it always has.
+    property string position: "bottom-right"
+    property string animation: "slide"
+    property string font: ""
+
     // --- PERSISTENCE ---------------------------------------------------------
     // DND lives here, in $XDG_CONFIG, because it is a preference. The
     // notification list is persisted too but separately, in $XDG_CACHE — see the
@@ -268,6 +281,9 @@ Singleton {
             root.timeoutCritical = settings.timeoutCritical
             root.timeoutNormal = settings.timeoutNormal
             root.timeoutLow = settings.timeoutLow
+            root.position = settings.position
+            root.animation = settings.animation
+            root.font = settings.font
         }
 
         // No settings file yet is the normal first-run case, not an error.
@@ -276,6 +292,9 @@ Singleton {
             root.timeoutCritical = 6000
             root.timeoutNormal = 4000
             root.timeoutLow = 2000
+            root.position = "bottom-right"
+            root.animation = "slide"
+            root.font = ""
         }
 
         JsonAdapter {
@@ -284,6 +303,9 @@ Singleton {
             property int timeoutCritical: 6000
             property int timeoutNormal: 4000
             property int timeoutLow: 2000
+            property string position: "bottom-right"
+            property string animation: "slide"
+            property string font: ""
         }
     }
 
