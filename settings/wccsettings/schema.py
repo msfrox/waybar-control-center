@@ -49,16 +49,6 @@ def infer_kind(value: Any) -> str:
 
 # --- our own files -----------------------------------------------------------
 
-NOTIFICATIONS = [
-    Field(
-        "dnd",
-        "Do not disturb",
-        "Suppresses the popups. Notifications still land in the panel — that is "
-        "what makes it safe to leave on.",
-        kind="bool",
-    ),
-]
-
 CONTROL_CENTER = [
     Field(
         "weather_location",
@@ -125,20 +115,10 @@ class Page:
 
 
 PAGES: list[Page] = [
-    Page(
-        "notifications",
-        "Notifications",
-        "preferences-system-notifications-symbolic",
-        "The daemon, do-not-disturb and history",
-        filename="notifications.json",
-        fields=NOTIFICATIONS,
-        defaults={"dnd": False},
-        note=(
-            "Quickshell owns org.freedesktop.Notifications on this machine; swaync "
-            "is masked and killed at login. History lives in the cache directory and "
-            "is capped at 50 entries."
-        ),
-    ),
+    # "notifications" moved to hyprsys (Applications > Notifications) — it grew a
+    # dedicated page there (dnd plus per-urgency popup timeouts) once absorption
+    # into Brilliant Settings covered more than this tool's generic Field
+    # inference was worth extending. See hyprsys/pages/notifications.py.
     Page(
         "control-center",
         "Control Center",

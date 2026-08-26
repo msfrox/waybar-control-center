@@ -112,14 +112,18 @@ mask came off — check `systemctl --user is-enabled swaync.service`, and re-run
   dismissed when their toast expires, so they never reach the panel.
 - **DND suppresses toasts, not notifications.** The panel still fills up, which is what
   swaync did and what makes DND safe to leave on. The DND flag is persisted
-  (`~/.config/waybar-control-center/notifications.json`), and separately, so is the
+  (`~/.config/hyprbar/notifications.json` — edited from hyprsys' Notifications page, not
+  from this repo's own settings tool any more), and separately, so is the
   notification list itself — up to 50 entries in
-  `~/.cache/waybar-control-center/notification-history.json`, debounced and written as
+  `~/.cache/hyprbar/notification-history.json`, debounced and written as
   plain snapshots (a `Notification` cannot be re-injected, so a restored entry is `historic:
   true`, carries no actions, and cannot be replied to).
-- **Timeouts** mirror the old swaync config: 2s low, 4s normal, 6s critical, and a
-  notification asking for its own timeout gets it. `expireTimeout == 0` means "until
-  dismissed" and the toast timer is not armed at all.
+- **Timeouts** default to the old swaync config's values — 2s low, 4s normal, 6s critical —
+  but are editable per urgency from hyprsys' Notifications page now (`timeoutCritical`/
+  `timeoutNormal`/`timeoutLow` in the same `notifications.json`), and a notification asking
+  for its own timeout still gets it. `expireTimeout == 0` means "until dismissed" and the
+  toast timer is not armed at all — setting a tier's own timeout to 0 means the same thing
+  for every notification at that urgency.
 - **Hovering a toast holds it open**, otherwise anything with an action button is a race.
 - **Arrival times live in the singleton**, keyed by notification id — a `Notification`
   carries no timestamp of its own, so "5m ago" has to be recorded as they land.

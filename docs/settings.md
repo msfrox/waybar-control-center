@@ -5,7 +5,7 @@ A standalone GTK4 / libadwaita application at `settings/`. `install.sh` symlinks
 Center's **Settings** quick action opens it.
 
 ```bash
-waybar-control-center-settings              # opens on Notifications
+waybar-control-center-settings              # opens on the first sidebar page
 waybar-control-center-settings --page waybar
 ```
 
@@ -31,10 +31,10 @@ it through a Quickshell `FileView`, so **writing the file is applying the settin
 
 | Path | Owner |
 |---|---|
-| `~/.config/waybar-control-center/notifications.json` | notification centre — DND |
-| `~/.config/waybar-control-center/control-center.json` | Control Center — collapse state |
-| `~/.config/waybar-control-center/claude-usage.json` | usage dial |
-| `~/.cache/waybar-control-center/notification-history.json` | notification history (not edited here) |
+| `~/.config/hyprbar/notifications.json` | notification centre — DND, popup timeouts (now edited from hyprsys, not here) |
+| `~/.config/hyprbar/control-center.json` | Control Center — collapse state |
+| `~/.config/hyprbar/claude-usage.json` | usage dial |
+| `~/.cache/hyprbar/notification-history.json` | notification history (not edited here) |
 | `~/.config/waybar/modules.json` | **ML4W's** — see below |
 
 The consequence worth stating: if this app is never installed or never launched, everything

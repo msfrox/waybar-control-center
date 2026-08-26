@@ -111,16 +111,22 @@ Singleton {
     }
 
     // --- TOASTS --------------------------------------------------------------
-    // Timeouts mirror the values that were in ~/.config/swaync/config.json, so
-    // the swap is not felt: 2s low, 4s normal, 6s critical. A notification that
-    // asks for its own timeout gets it; 0 means "until dismissed".
+    // Timeouts default to the values that were in ~/.config/swaync/config.json
+    // (2s low, 4s normal, 6s critical) but are editable from hyprsys' Notifications
+    // page now -- see `settings` below, read from the same settingsFile as `dnd`.
+    // A notification that asks for its own timeout still gets it; 0 means "until
+    // dismissed", same meaning as setting a tier's own timeout to 0.
     function timeoutFor(n: var): int {
         if (n.expireTimeout > 0) return n.expireTimeout
         if (n.expireTimeout === 0) return 0
-        if (n.urgency === NotificationUrgency.Critical) return 6000
-        if (n.urgency === NotificationUrgency.Low) return 2000
-        return 4000
+        if (n.urgency === NotificationUrgency.Critical) return root.timeoutCritical
+        if (n.urgency === NotificationUrgency.Low) return root.timeoutLow
+        return root.timeoutNormal
     }
+
+    property int timeoutCritical: 6000
+    property int timeoutNormal: 4000
+    property int timeoutLow: 2000
 
     function dropToast(n: var): void {
         root.toasts = root.toasts.filter(t => t !== n)
@@ -257,14 +263,27 @@ Singleton {
         path: Quickshell.env("HOME") + "/.config/hyprbar/notifications.json"
         watchChanges: true
         onFileChanged: reload()
-        onLoaded: root.dnd = settings.dnd
+        onLoaded: {
+            root.dnd = settings.dnd
+            root.timeoutCritical = settings.timeoutCritical
+            root.timeoutNormal = settings.timeoutNormal
+            root.timeoutLow = settings.timeoutLow
+        }
 
         // No settings file yet is the normal first-run case, not an error.
-        onLoadFailed: (error) => { root.dnd = false }
+        onLoadFailed: (error) => {
+            root.dnd = false
+            root.timeoutCritical = 6000
+            root.timeoutNormal = 4000
+            root.timeoutLow = 2000
+        }
 
         JsonAdapter {
             id: settings
             property bool dnd: false
+            property int timeoutCritical: 6000
+            property int timeoutNormal: 4000
+            property int timeoutLow: 2000
         }
     }
 
