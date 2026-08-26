@@ -265,6 +265,8 @@ Singleton {
     property string position: "bottom-right"
     property string animation: "slide"
     property string font: ""
+    // 0 means "no override" — same sentinel `font`'s "" already uses.
+    property int fontSize: 0
 
     // --- PERSISTENCE ---------------------------------------------------------
     // DND lives here, in $XDG_CONFIG, because it is a preference. The
@@ -284,6 +286,7 @@ Singleton {
             root.position = settings.position
             root.animation = settings.animation
             root.font = settings.font
+            root.fontSize = settings.fontSize
         }
 
         // No settings file yet is the normal first-run case, not an error.
@@ -295,6 +298,7 @@ Singleton {
             root.position = "bottom-right"
             root.animation = "slide"
             root.font = ""
+            root.fontSize = 0
         }
 
         JsonAdapter {
@@ -306,6 +310,7 @@ Singleton {
             property string position: "bottom-right"
             property string animation: "slide"
             property string font: ""
+            property int fontSize: 0
         }
     }
 

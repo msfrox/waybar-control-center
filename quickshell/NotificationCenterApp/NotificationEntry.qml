@@ -23,6 +23,12 @@ Rectangle {
     // notification reads in the persistent panel.
     property string fontOverride: ""
     readonly property string effectiveFont: entry.fontOverride !== "" ? entry.fontOverride : Theme.fontFamily
+    // 0 (the default) means "no override" — same convention as
+    // `fontOverride`'s "". Toasts pass `NotificationState.fontSize` the same
+    // way they already pass `NotificationState.font`.
+    property int fontSizeOverride: 0
+    readonly property int effectiveSummarySize: entry.fontSizeOverride > 0 ? entry.fontSizeOverride : 13
+    readonly property int effectiveBodySize: entry.fontSizeOverride > 0 ? Math.max(8, entry.fontSizeOverride - 1) : 12
 
     implicitHeight: layout.implicitHeight + 20
     radius: PanelStyle.controlRadius
@@ -130,7 +136,7 @@ Rectangle {
                 visible: text !== ""
                 color: Theme.on_background
                 font.family: entry.effectiveFont
-                font.pixelSize: 13
+                font.pixelSize: entry.effectiveSummarySize
                 font.bold: true
                 wrapMode: Text.WordWrap
                 maximumLineCount: 2
@@ -144,7 +150,7 @@ Rectangle {
                 color: Theme.on_background
                 opacity: 0.75
                 font.family: entry.effectiveFont
-                font.pixelSize: 12
+                font.pixelSize: entry.effectiveBodySize
                 // The server advertises body markup, so senders may use Pango.
                 textFormat: Text.RichText
                 wrapMode: Text.WordWrap

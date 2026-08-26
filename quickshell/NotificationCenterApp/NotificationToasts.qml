@@ -277,6 +277,7 @@ PanelWindow {
                     notification: toast.notif
                     showBackground: false
                     fontOverride: NotificationState.font
+                    fontSizeOverride: NotificationState.fontSize
                 }
             }
 
