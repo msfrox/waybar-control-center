@@ -9,9 +9,11 @@
 // the usage endpoint; it caches its reading to
 //   ~/.cache/hyprbar/claude-usage-state.json
 // which this reads, and it owns the settings file
-//   ~/.config/hyprbar/claude-usage.json
+//   ~/.local/state/brilliant/claude-usage.json
 // which this writes through `claude-usage.py --set key=value`. Two processes
-// hand-editing the same JSON would be a race for no benefit.
+// hand-editing the same JSON would be a race for no benefit. Not a setting --
+// sampled data hyprsys's own FileBackedPage also writes, so it lives under
+// state, not config; see claude-usage.py's own SETTINGS comment.
 //
 // Window chrome is duplicated from AudioWindow on purpose; see the note at the
 // top of BluetoothWindow.qml.
@@ -85,7 +87,7 @@ PanelWindow {
     // --- DATA ---
     readonly property string script: Quickshell.env("HOME") + "/.config/brilliant/providers/claude-usage.py"
     readonly property string statePath: Quickshell.env("HOME") + "/.cache/hyprbar/claude-usage-state.json"
-    readonly property string settingsPath: Quickshell.env("HOME") + "/.config/hyprbar/claude-usage.json"
+    readonly property string settingsPath: Quickshell.env("HOME") + "/.local/state/brilliant/claude-usage.json"
 
     property var state: ({})
     property var settings: ({

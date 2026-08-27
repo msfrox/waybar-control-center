@@ -18,7 +18,7 @@ those calls are served from the cache without touching the network.
 
 **Location is geo-IP by default**, which is coarse — it resolves to whichever exchange
 the ISP hands out, and lands on the VPN exit entirely whenever Tailscale is routing. To
-pin it, set `weather_location` in ~/.config/hyprbar/control-center.json;
+pin it, set `controlCenter.weather_location` in ~/.config/brilliant/brilliant.json;
 that is the file the panel already owns, so the Settings app can edit it and there is
 nothing to restart. WEATHER_LOCATION in the environment overrides the file, and
 DEFAULT_LOCATION below is the last fallback. wttr.in takes a city name ("Colombo"),
@@ -38,8 +38,10 @@ import urllib.parse
 
 CACHE_DIR = os.path.expanduser("~/.cache/hyprbar")
 CACHE = os.path.join(CACHE_DIR, "weather.json")
-SETTINGS = os.path.expanduser(
-    "~/.config/hyprbar/control-center.json")
+# control-center.json folded into the shared store -- see
+# docs/26-path-to-v1.md (brilliant repo) §B1 / the collapse-hyprbar-files
+# migration. `weather_location` now lives under the `controlCenter` namespace.
+SETTINGS = os.path.expanduser("~/.config/brilliant/brilliant.json")
 TTL = 1800  # seconds; matches the old bar module's interval
 DEFAULT_LOCATION = ""  # "" = wttr.in geo-IP guess
 
@@ -47,7 +49,7 @@ DEFAULT_LOCATION = ""  # "" = wttr.in geo-IP guess
 def configured_location():
     try:
         with open(SETTINGS) as f:
-            value = json.load(f).get("weather_location", "")
+            value = json.load(f).get("controlCenter", {}).get("weather_location", "")
         if isinstance(value, str) and value.strip():
             return value.strip()
     except Exception:

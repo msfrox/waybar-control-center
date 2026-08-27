@@ -34,7 +34,13 @@ import urllib.request
 HOME = os.path.expanduser("~")
 CRED = os.path.join(os.environ.get("CLAUDE_CONFIG_DIR", os.path.join(HOME, ".claude")),
                     ".credentials.json")
-SETTINGS = os.path.join(HOME, ".config/hyprbar/claude-usage.json")
+# Not a setting -- sampled data hyprsys's own FileBackedPage also writes, so
+# both sides have to agree on where it lives. Moved under state (not config)
+# per ADR-0005: "a decision would change without the user ever deciding
+# anything" belongs under ~/.local/state/, never ~/.config/. See
+# docs/26-path-to-v1.md (brilliant repo) §B1 / the collapse-hyprbar-files
+# migration.
+SETTINGS = os.path.join(HOME, ".local/state/brilliant/claude-usage.json")
 CACHE_DIR = os.path.join(HOME, ".cache/hyprbar")
 STATE = os.path.join(CACHE_DIR, "claude-usage-state.json")
 

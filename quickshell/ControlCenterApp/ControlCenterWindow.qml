@@ -355,8 +355,7 @@ PanelWindow {
         const next = Object.assign({}, root.collapseState)
         next[title] = collapsed
         root.collapseState = next
-        settings.collapsed = next
-        settingsFile.writeAdapter()
+        Quickshell.execDetached(["brilliant-setting", "set", "--json", "controlCenter.collapsed", JSON.stringify(next)])
     }
 
     // --- CATALOGUE ---
@@ -389,23 +388,22 @@ PanelWindow {
     // write again forever.
     function publishCatalogue() {
         const found = root.collectCatalogue()
-        if (JSON.stringify(found.sections) === JSON.stringify(settings.sections)
-            && JSON.stringify(found.actions) === JSON.stringify(settings.actions))
+        if (JSON.stringify(found.sections) === JSON.stringify(settings.controlCenter.sections)
+            && JSON.stringify(found.actions) === JSON.stringify(settings.controlCenter.actions))
             return
-        settings.sections = found.sections
-        settings.actions = found.actions
-        settingsFile.writeAdapter()
+        Quickshell.execDetached(["brilliant-setting", "set", "--json", "controlCenter.sections", JSON.stringify(found.sections)])
+        Quickshell.execDetached(["brilliant-setting", "set", "--json", "controlCenter.actions", JSON.stringify(found.actions)])
     }
 
     FileView {
         id: settingsFile
-        path: Quickshell.env("HOME") + "/.config/hyprbar/control-center.json"
+        path: Quickshell.env("HOME") + "/.config/brilliant/brilliant.json"
         watchChanges: true
         onFileChanged: reload()
         onLoaded: {
-            root.collapseState = settings.collapsed
-            root.hiddenSections = settings.hiddenSections
-            root.hiddenActions = settings.hiddenActions
+            root.collapseState = settings.controlCenter.collapsed
+            root.hiddenSections = settings.controlCenter.hiddenSections
+            root.hiddenActions = settings.controlCenter.hiddenActions
             root.publishCatalogue()
             // Picks up a location edit without a restart. Cheap: weather.py only
             // reaches the network when the location actually changed or the cache
@@ -417,24 +415,26 @@ PanelWindow {
         // section just keeps its collapsed: false default below.
         onLoadFailed: (error) => {}
 
-        // Every key this file carries is declared here, including the two
-        // this panel never writes. hyprsys owns those, and a JsonAdapter
-        // serialises only the properties it knows about - so leaving them
-        // undeclared would mean the next collapse toggle silently deleted
-        // whatever hyprsys had just written.
+        // brilliant.json is shared with unrelated top-level namespaces
+        // (appearance, apps, bar, keybinds, nightlight, notifications, power,
+        // quicklinks, screenshot, wallpaper, windowRules, ...). Only
+        // `controlCenter` is declared here. Writes MUST go through
+        // `brilliant-setting`, never settingsFile.writeAdapter() — that call
+        // serialises only the properties declared on this JsonAdapter and
+        // would silently wipe every other namespace in the file.
         JsonAdapter {
             id: settings
-            property var collapsed: ({})
-            property var hiddenSections: ({})
-            property var hiddenActions: ({})
-            // Published by this panel, read by hyprsys. Not settings — a
-            // description of what settings exist.
-            property var sections: []
-            property var actions: []
-            // Read by weather.py, never written here - but it has to be declared
-            // for the same reason the hyprsys keys above are: an undeclared key is
-            // dropped on the next writeAdapter().
-            property string weather_location: ""
+            property var controlCenter: ({
+                collapsed: {},
+                hiddenSections: {},
+                hiddenActions: {},
+                // Published by this panel, read by hyprsys. Not settings — a
+                // description of what settings exist.
+                sections: [],
+                actions: [],
+                // Read by weather.py, never written here.
+                weather_location: ""
+            })
         }
     }
 

@@ -82,8 +82,7 @@ Singleton {
     function toggleDnd(): void {
         root.dnd = !root.dnd
         if (root.dnd) root.toasts = []
-        settings.dnd = root.dnd
-        settingsFile.writeAdapter()
+        Quickshell.execDetached(["brilliant-setting", "set", "notifications.dnd", root.dnd ? "true" : "false"])
     }
 
     // --- ACTIONS -------------------------------------------------------------
@@ -275,18 +274,18 @@ Singleton {
     // into a file the settings app treats as user intent.
     FileView {
         id: settingsFile
-        path: Quickshell.env("HOME") + "/.config/hyprbar/notifications.json"
+        path: Quickshell.env("HOME") + "/.config/brilliant/brilliant.json"
         watchChanges: true
         onFileChanged: reload()
         onLoaded: {
-            root.dnd = settings.dnd
-            root.timeoutCritical = settings.timeoutCritical
-            root.timeoutNormal = settings.timeoutNormal
-            root.timeoutLow = settings.timeoutLow
-            root.position = settings.position
-            root.animation = settings.animation
-            root.font = settings.font
-            root.fontSize = settings.fontSize
+            root.dnd = settings.notifications.dnd
+            root.timeoutCritical = settings.notifications.timeoutCritical
+            root.timeoutNormal = settings.notifications.timeoutNormal
+            root.timeoutLow = settings.notifications.timeoutLow
+            root.position = settings.notifications.position
+            root.animation = settings.notifications.animation
+            root.font = settings.notifications.font
+            root.fontSize = settings.notifications.fontSize
         }
 
         // No settings file yet is the normal first-run case, not an error.
@@ -303,14 +302,22 @@ Singleton {
 
         JsonAdapter {
             id: settings
-            property bool dnd: false
-            property int timeoutCritical: 6000
-            property int timeoutNormal: 4000
-            property int timeoutLow: 2000
-            property string position: "bottom-right"
-            property string animation: "slide"
-            property string font: ""
-            property int fontSize: 0
+            // This file is shared with other namespaces (appearance, apps, bar,
+            // controlCenter, keybinds, nightlight, power, quicklinks, screenshot,
+            // wallpaper, windowRules, ...) written by other components. Only
+            // `notifications` is declared here — writes MUST go through
+            // `brilliant-setting`, never writeAdapter(), or every other
+            // namespace in the file gets silently dropped.
+            property var notifications: ({
+                dnd: false,
+                timeoutCritical: 6000,
+                timeoutNormal: 4000,
+                timeoutLow: 2000,
+                position: "bottom-right",
+                animation: "slide",
+                font: "",
+                fontSize: 0
+            })
         }
     }
 
