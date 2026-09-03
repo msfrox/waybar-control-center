@@ -41,6 +41,7 @@ import qs.NotificationCenterApp
 // does not belong in the shared set. Migrating them is follow-up work, not a
 // prerequisite — the tokens are the part that has to be shared.
 import qs.Panels
+import qs.BarApp // BarReveal
 
 PanelWindow {
     id: root
@@ -75,12 +76,17 @@ PanelWindow {
     property bool showWindow: false
     visible: showWindow
 
+    // See AudioWindow.qml's comment: BarReveal is a shared singleton, no IPC
+    // round trip needed even across app directories in this one process.
     onIsOpenChanged: {
         if (isOpen) {
             showWindow = true
             refresh()
             reloadBrightness()
             reloadWeather()
+            BarReveal.acquire("control-center")
+        } else {
+            BarReveal.release("control-center")
         }
     }
 

@@ -23,6 +23,7 @@ import QtQuick.Controls
 import QtQuick.Effects
 import qs.CustomTheme
 import qs.Panels
+import qs.BarApp // BarReveal
 
 PanelWindow {
     id: root
@@ -50,14 +51,18 @@ PanelWindow {
     property bool showWindow: false
     visible: showWindow
 
+    // See AudioWindow.qml's comment: BarReveal is a shared singleton, no IPC
+    // round trip needed even across app directories in this one process.
     onIsOpenChanged: {
         if (isOpen) {
             showWindow = true
             // Only scan while the panel is actually on screen - discovery is
             // expensive and drains peripherals that answer it.
             if (adapter && adapter.enabled) adapter.discovering = true
-        } else if (adapter) {
-            adapter.discovering = false
+            BarReveal.acquire("bluetooth")
+        } else {
+            if (adapter) adapter.discovering = false
+            BarReveal.release("bluetooth")
         }
     }
 

@@ -28,6 +28,7 @@ import QtQuick.Controls
 import QtQuick.Effects
 import qs.CustomTheme
 import qs.Panels
+import qs.BarApp // BarReveal
 
 PanelWindow {
     id: root
@@ -55,7 +56,12 @@ PanelWindow {
     property bool showWindow: false
     visible: showWindow
 
-    onIsOpenChanged: if (isOpen) { showWindow = true; reload() }
+    // See AudioWindow.qml's comment: BarReveal is a shared singleton, no IPC
+    // round trip needed even across app directories in this one process.
+    onIsOpenChanged: {
+        if (isOpen) { showWindow = true; reload(); BarReveal.acquire("claude-usage") }
+        else BarReveal.release("claude-usage")
+    }
 
     Behavior on currentBottomMargin {
         NumberAnimation {

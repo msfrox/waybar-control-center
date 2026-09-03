@@ -19,6 +19,7 @@ import QtQuick.Controls
 import QtQuick.Effects
 import qs.CustomTheme
 import qs.Panels
+import qs.BarApp // BarReveal
 
 PanelWindow {
     id: root
@@ -46,16 +47,20 @@ PanelWindow {
     property bool showWindow: false
     visible: showWindow
 
+    // See AudioWindow.qml's comment: BarReveal is a shared singleton, no IPC
+    // round trip needed even across app directories in this one process.
     onIsOpenChanged: {
         if (isOpen) {
             showWindow = true
             // Scanning only while visible - a background scan on every wifi
             // device is a real power cost for a list nobody is looking at.
             if (wifiDevice) wifiDevice.scannerEnabled = true
+            BarReveal.acquire("network")
         } else {
             if (wifiDevice) wifiDevice.scannerEnabled = false
             pskFor = null
             pskText = ""
+            BarReveal.release("network")
         }
     }
 

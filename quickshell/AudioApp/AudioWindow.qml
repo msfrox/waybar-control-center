@@ -26,6 +26,7 @@ import QtQuick.Controls
 import QtQuick.Effects
 import qs.CustomTheme
 import qs.Panels
+import qs.BarApp // BarReveal
 
 PanelWindow {
     id: root
@@ -64,10 +65,18 @@ PanelWindow {
     property bool showWindow: false
     visible: showWindow
 
+    // Holds hyprbar's auto-hiding bar open while this popout is on screen --
+    // BarReveal is a QML singleton shared by every file in this one
+    // Quickshell process, so this needs no IPC round trip even though
+    // AudioWindow and BarWindow live in separate app directories.
+    // 📄 hyprbar docs/26-path-to-v1.md §B11, brilliant repo
     onIsOpenChanged: {
         if (isOpen) {
             showWindow = true
             reloadEffects()
+            BarReveal.acquire("audio")
+        } else {
+            BarReveal.release("audio")
         }
     }
 

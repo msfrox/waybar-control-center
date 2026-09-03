@@ -9,6 +9,7 @@ import QtQuick.Controls
 import QtQuick.Effects
 import qs.CustomTheme
 import qs.Panels
+import qs.BarApp // BarReveal
 
 // The notification centre: clock, calendar, notifications, bottom right.
 //
@@ -59,6 +60,8 @@ PanelWindow {
     property bool showWindow: false
     visible: showWindow
 
+    // See AudioWindow.qml's comment: BarReveal is a shared singleton, no IPC
+    // round trip needed even across app directories in this one process.
     onIsOpenChanged: {
         if (isOpen) {
             showWindow = true
@@ -74,6 +77,9 @@ PanelWindow {
                 currentYear = todayYear
                 updateCalendar(currentYear, currentMonth)
             }
+            BarReveal.acquire("notifications")
+        } else {
+            BarReveal.release("notifications")
         }
     }
 
