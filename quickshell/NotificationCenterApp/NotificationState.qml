@@ -277,15 +277,27 @@ Singleton {
         path: Quickshell.env("HOME") + "/.config/brilliant/brilliant.json"
         watchChanges: true
         onFileChanged: reload()
+        // hyprsys writes one key at a time (`BrilliantStoreSource.set()`), so
+        // `notifications` in the file is whatever subset of keys a machine has
+        // ever actually touched — never guaranteed complete. `JsonAdapter`
+        // replaces `settings.notifications` wholesale from that partial
+        // object, so an untouched key reads back `undefined` here, not the
+        // default embedded in the property initializer below (that default
+        // only applies before the file has ever loaded). Assigning `undefined`
+        // to a typed QML property is a silent no-op with a console warning —
+        // `@…NotificationState.qml[…]: Error: Cannot assign [undefined] to
+        // int` was showing up on every reload — so each read falls back to
+        // the same default `onLoadFailed` uses, same as `_get()` on the
+        // Python side of this same file already does.
         onLoaded: {
-            root.dnd = settings.notifications.dnd
-            root.timeoutCritical = settings.notifications.timeoutCritical
-            root.timeoutNormal = settings.notifications.timeoutNormal
-            root.timeoutLow = settings.notifications.timeoutLow
-            root.position = settings.notifications.position
-            root.animation = settings.notifications.animation
-            root.font = settings.notifications.font
-            root.fontSize = settings.notifications.fontSize
+            root.dnd = settings.notifications.dnd ?? false
+            root.timeoutCritical = settings.notifications.timeoutCritical ?? 6000
+            root.timeoutNormal = settings.notifications.timeoutNormal ?? 4000
+            root.timeoutLow = settings.notifications.timeoutLow ?? 2000
+            root.position = settings.notifications.position ?? "bottom-right"
+            root.animation = settings.notifications.animation ?? "slide"
+            root.font = settings.notifications.font ?? ""
+            root.fontSize = settings.notifications.fontSize ?? 0
         }
 
         // No settings file yet is the normal first-run case, not an error.
