@@ -82,8 +82,44 @@ PanelWindow {
     }
 
     // --- ANIMATION: fade / slide / scale / none ---------------------------
+    //
+    // `NotificationState.animation` ("none"/"slide"/"scale") is an animation
+    // KIND, not a speed — B4.1 migration left it exactly as it was. Speed and
+    // easing, below, now come from the shared appearance resolver instead of
+    // being hardcoded per NumberAnimation:
+    //
+    //   - The opacity fade (`animDuration`, both add and remove — this is the
+    //     one duration that was already shared between the two) was a bare
+    //     220ms. Nearest tier by distance: |220-160|=40 vs |220-260|=60 puts
+    //     it 20ms closer to "slow" (260) than "normal" (160) — kept as "slow".
+    //   - The add transition's slide/scale duration was already
+    //     `PanelStyle.animSlow` (== Tokens.motion.duration.slow, 260) — an
+    //     exact match for tier "slow", so that one call site had no rounding
+    //     decision to make.
+    //   - The remove transition's slide/scale duration and the `displaced`
+    //     reflow duration were both a bare 200ms. |200-160|=40 vs
+    //     |200-260|=60 puts 200 closer to "normal" (160) — kept as "normal".
+    //     This does shave 40ms off the old exit speed; not perceptible at
+    //     this scale, and consistent nearest-tier reasoning beats a bespoke
+    //     "300" tier existing nowhere else.
+    //
+    // Easing.OutQuint (enter slide), Easing.InQuint (exit slide/scale) and
+    // Easing.OutCubic (displaced reflow) were each a fixed Qt curve with no
+    // per-surface control. All three move to `Brilliant.easingCurve()`.
+    // WORTH FLAGGING: the resolver has exactly one easing per surface, not
+    // one per transition role — so enter and exit now animate on the SAME
+    // curve where they used to differ (ease-out on the way in, ease-in on
+    // the way out). That symmetry loss is the resolver's model working as
+    // designed (one "animation.easing" setting per surface, from B4.1), not
+    // an oversight, but it is a real, visible behaviour change from today.
+    //
+    // Easing.OutBack on the scale-in (add transition, `scale` animation) is
+    // NOT migrated — its overshoot is a deliberate visual (the toast
+    // "pops"), not a default easing standing in for "whatever the system
+    // uses", so it stays a literal curve. Its duration still comes from the
+    // resolver, since duration and easing are orthogonal knobs.
     readonly property bool animOn: NotificationState.animation !== "none"
-    readonly property int animDuration: root.animOn ? 220 : 0
+    readonly property int animDuration: root.animOn ? Brilliant.duration("notification-toasts", "slow") : 0
     readonly property bool doSlide: NotificationState.animation === "slide"
     readonly property bool doScale: NotificationState.animation === "scale"
 
@@ -192,21 +228,26 @@ PanelWindow {
                 property: "x"
                 from: root.slideOffsetX()
                 to: 0
-                duration: root.doSlide ? PanelStyle.animSlow : 0
-                easing.type: Easing.OutQuint
+                duration: root.doSlide ? Brilliant.duration("notification-toasts", "slow") : 0
+                easing.type: Easing.BezierSpline
+                easing.bezierCurve: Brilliant.easingCurve("notification-toasts")
             }
             NumberAnimation {
                 property: "y"
                 from: root.slideOffsetY()
                 to: 0
-                duration: root.doSlide ? PanelStyle.animSlow : 0
-                easing.type: Easing.OutQuint
+                duration: root.doSlide ? Brilliant.duration("notification-toasts", "slow") : 0
+                easing.type: Easing.BezierSpline
+                easing.bezierCurve: Brilliant.easingCurve("notification-toasts")
             }
             NumberAnimation {
                 property: "scale"
                 from: root.doScale ? 0.8 : 1
                 to: 1
-                duration: root.doScale ? PanelStyle.animSlow : 0
+                duration: root.doScale ? Brilliant.duration("notification-toasts", "slow") : 0
+                // Deliberate overshoot, not a default standing in for "whatever
+                // curve the system uses" — left as a literal Qt curve. See the
+                // ANIMATION comment block above.
                 easing.type: Easing.OutBack
             }
         }
@@ -216,20 +257,23 @@ PanelWindow {
             NumberAnimation {
                 property: "x"
                 to: root.slideOffsetX()
-                duration: root.doSlide ? 200 : 0
-                easing.type: Easing.InQuint
+                duration: root.doSlide ? Brilliant.duration("notification-toasts", "normal") : 0
+                easing.type: Easing.BezierSpline
+                easing.bezierCurve: Brilliant.easingCurve("notification-toasts")
             }
             NumberAnimation {
                 property: "y"
                 to: root.slideOffsetY()
-                duration: root.doSlide ? 200 : 0
-                easing.type: Easing.InQuint
+                duration: root.doSlide ? Brilliant.duration("notification-toasts", "normal") : 0
+                easing.type: Easing.BezierSpline
+                easing.bezierCurve: Brilliant.easingCurve("notification-toasts")
             }
             NumberAnimation {
                 property: "scale"
                 to: root.doScale ? 0.8 : 1
-                duration: root.doScale ? 200 : 0
-                easing.type: Easing.InQuint
+                duration: root.doScale ? Brilliant.duration("notification-toasts", "normal") : 0
+                easing.type: Easing.BezierSpline
+                easing.bezierCurve: Brilliant.easingCurve("notification-toasts")
             }
         }
 
@@ -239,7 +283,12 @@ PanelWindow {
         // would still have every survivor teleport once each new one landed.
         // Skipped (duration 0) when "none" is selected, same as add/remove.
         displaced: Transition {
-            NumberAnimation { properties: "x,y"; duration: root.animOn ? 200 : 0; easing.type: Easing.OutCubic }
+            NumberAnimation {
+                properties: "x,y"
+                duration: root.animOn ? Brilliant.duration("notification-toasts", "normal") : 0
+                easing.type: Easing.BezierSpline
+                easing.bezierCurve: Brilliant.easingCurve("notification-toasts")
+            }
         }
 
         delegate: Item {

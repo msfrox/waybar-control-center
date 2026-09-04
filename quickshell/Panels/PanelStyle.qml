@@ -73,7 +73,25 @@ QtObject {
     // frost silently stops applying.
 
     readonly property int panelRadius: Tokens.radius.lg              // settings: tokens.radius.lg
-    readonly property real panelAlpha: Tokens.opacity.panel          // settings: tokens.opacity.panel
+    // Routed through the shared appearance resolver (B4.1) rather than read
+    // straight off Tokens.opacity.panel: this lets a surface override its own
+    // panel alpha from the Appearance page (layer 1/2) without touching the
+    // design-token default every other panel still falls back to (layer 3,
+    // passed here as the literal fallback so a missing/unreadable
+    // brilliant.json still renders today's look — layer 4, per Brilliant.qml's
+    // header).
+    //
+    // This file is shared by hyprbar as well as this repo — PanelStyle backs
+    // every popout hyprbar draws (PowerPopout, PlayerStack, WindowPreview,
+    // the quicklinks drawer), not just this repo's own windows. Resolving
+    // under the "control-center" surface id here is deliberate and correct
+    // for both: surfaces.json gives "control-center" and "popouts" the same
+    // shape and neither has a Brilliant.qml default token override, so they
+    // resolve identically unless Shehan sets a per-surface override on one of
+    // them — at which point they are meant to diverge, and PanelStyle would
+    // need a surface-id parameter to let them. Out of scope for this pass;
+    // flagged rather than silently assumed correct forever.
+    readonly property real panelAlpha: Brilliant.transparency("control-center", Tokens.opacity.panel)
     readonly property color panelColor: style.withAlpha(Theme.background, style.panelAlpha)
 
     readonly property int panelBorderWidth: Tokens.size.border       // settings: tokens.size.border
@@ -160,7 +178,10 @@ QtObject {
     // `fillActive` and is the one that is easy to get wrong: on this palette
     // Theme.primary is LIGHT, so light text on an active tile disappears.
 
-    readonly property string fontFamily: Theme.fontFamily
+    // Same resolver routing as panelAlpha above, same "control-center" ==
+    // "popouts" caveat: falls back to Theme.fontFamily, today's value, if the
+    // store can't be read or no override is set.
+    readonly property string fontFamily: Brilliant.fontFamily("control-center", Theme.fontFamily)
     readonly property color textPrimary: Theme.on_surface
     readonly property color textMuted: Theme.outline
     readonly property color textAccent: Theme.primary

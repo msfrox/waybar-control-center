@@ -361,6 +361,17 @@ PanelWindow {
     // All keyed by title/label rather than index: sections and tiles get
     // reordered in this file far more often than the persisted file gets
     // touched, and a name survives a reorder where an index wouldn't.
+    //
+    // These used to be assigned once per reload out of a private FileView's
+    // onLoaded (see the removed block below). They stay plain, locally-owned
+    // properties rather than becoming direct bindings to Brilliant.get() for
+    // one reason: setSectionCollapsed() below writes the NEXT value here
+    // optimistically, before brilliant-setting's write has even landed on
+    // disk, so the header's expand/collapse glyph flips the instant you
+    // click it rather than waiting a file-watch round trip. A plain binding
+    // to Brilliant.get() would make that optimistic assignment pointless -
+    // the resolver would just overwrite it back to the stale on-disk value
+    // on the next re-render.
     property var collapseState: ({})
 
     // Which sections and quick-action tiles are hidden. Stored as *hidden*
@@ -411,58 +422,47 @@ PanelWindow {
         return { sections: sections, actions: actions }
     }
 
-    // Written only when it has actually changed. The FileView watches this
-    // file, so an unconditional write on load would reload, re-publish and
-    // write again forever.
+    // Written only when it has actually changed. Brilliant.doc is watched
+    // live off the same file, so an unconditional write on every doc change
+    // would reload, re-publish and write again forever.
     function publishCatalogue() {
         const found = root.collectCatalogue()
-        if (JSON.stringify(found.sections) === JSON.stringify(settings.controlCenter.sections)
-            && JSON.stringify(found.actions) === JSON.stringify(settings.controlCenter.actions))
+        if (JSON.stringify(found.sections) === JSON.stringify(Brilliant.get("controlCenter.sections", []))
+            && JSON.stringify(found.actions) === JSON.stringify(Brilliant.get("controlCenter.actions", [])))
             return
         Quickshell.execDetached(["brilliant-setting", "set", "--json", "controlCenter.sections", JSON.stringify(found.sections)])
         Quickshell.execDetached(["brilliant-setting", "set", "--json", "controlCenter.actions", JSON.stringify(found.actions)])
     }
 
-    FileView {
-        id: settingsFile
-        path: Quickshell.env("HOME") + "/.config/brilliant/brilliant.json"
-        watchChanges: true
-        onFileChanged: reload()
-        onLoaded: {
-            root.collapseState = settings.controlCenter.collapsed
-            root.hiddenSections = settings.controlCenter.hiddenSections
-            root.hiddenActions = settings.controlCenter.hiddenActions
+    // Used to be a private FileView + JsonAdapter reading `controlCenter.*`
+    // straight out of brilliant.json, duplicated per consumer the same way
+    // BarWindow.qml and OsdWindow.qml each had their own. That FileView was
+    // read-only in practice - every write in this file already goes through
+    // `brilliant-setting set`, never a JsonAdapter writeAdapter() call, so
+    // moving the read side to the shared resolver (qs.CustomTheme, `Brilliant`)
+    // drops nothing. `Brilliant.get()` is the same dotted-path, watched-live
+    // read `BrilliantStoreSource` has given Python for months (see
+    // Brilliant.qml's own header) - this was the one QML surface still
+    // missing it.
+    //
+    // `Brilliant.doc` changes on every successful (re)parse of brilliant.json,
+    // which is exactly the set of events the old FileView.onLoaded fired on:
+    // the first read, and every edit after, ours or anyone else's. So the
+    // two side effects that used to live in onLoaded - re-publishing the
+    // catalogue and re-reading the weather cache for a possible location
+    // change - move here unchanged, just triggered off the resolver's signal
+    // instead of a private one.
+    Connections {
+        target: Brilliant
+        function onDocChanged() {
+            root.collapseState = Brilliant.get("controlCenter.collapsed", {})
+            root.hiddenSections = Brilliant.get("controlCenter.hiddenSections", {})
+            root.hiddenActions = Brilliant.get("controlCenter.hiddenActions", {})
             root.publishCatalogue()
             // Picks up a location edit without a restart. Cheap: weather.py only
             // reaches the network when the location actually changed or the cache
             // has aged out, so the writes this panel does itself cost a file read.
             root.reloadWeather()
-        }
-
-        // No file yet is the normal first-run case, not an error - every
-        // section just keeps its collapsed: false default below.
-        onLoadFailed: (error) => {}
-
-        // brilliant.json is shared with unrelated top-level namespaces
-        // (appearance, apps, bar, keybinds, nightlight, notifications, power,
-        // quicklinks, screenshot, wallpaper, windowRules, ...). Only
-        // `controlCenter` is declared here. Writes MUST go through
-        // `brilliant-setting`, never settingsFile.writeAdapter() — that call
-        // serialises only the properties declared on this JsonAdapter and
-        // would silently wipe every other namespace in the file.
-        JsonAdapter {
-            id: settings
-            property var controlCenter: ({
-                collapsed: {},
-                hiddenSections: {},
-                hiddenActions: {},
-                // Published by this panel, read by hyprsys. Not settings — a
-                // description of what settings exist.
-                sections: [],
-                actions: [],
-                // Read by weather.py, never written here.
-                weather_location: ""
-            })
         }
     }
 
