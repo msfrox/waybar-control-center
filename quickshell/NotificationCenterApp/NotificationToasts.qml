@@ -105,7 +105,14 @@ PanelWindow {
     //
     // Easing.OutQuint (enter slide), Easing.InQuint (exit slide/scale) and
     // Easing.OutCubic (displaced reflow) were each a fixed Qt curve with no
-    // per-surface control. All three move to `Brilliant.easingCurve()`.
+    // per-surface control. All three move to `Brilliant.easingCurve()` -- and
+    // each passes the ROLE it is playing, which is what preserves the
+    // asymmetry those three curves encoded. A first cut of this migration
+    // dropped the role and put entrances and exits on one curve; a toast that
+    // eases in on the way out reads as broken rather than as styled, so the
+    // direction is meaning, not decoration. Entrances decelerate, exits
+    // accelerate, and the displaced reflow -- which has no direction to
+    // express -- takes the surface's own easing.
     // WORTH FLAGGING: the resolver has exactly one easing per surface, not
     // one per transition role — so enter and exit now animate on the SAME
     // curve where they used to differ (ease-out on the way in, ease-in on
@@ -230,7 +237,7 @@ PanelWindow {
                 to: 0
                 duration: root.doSlide ? Brilliant.duration("notification-toasts", "slow") : 0
                 easing.type: Easing.BezierSpline
-                easing.bezierCurve: Brilliant.easingCurve("notification-toasts")
+                easing.bezierCurve: Brilliant.easingCurve("notification-toasts", "decelerate")
             }
             NumberAnimation {
                 property: "y"
@@ -238,7 +245,7 @@ PanelWindow {
                 to: 0
                 duration: root.doSlide ? Brilliant.duration("notification-toasts", "slow") : 0
                 easing.type: Easing.BezierSpline
-                easing.bezierCurve: Brilliant.easingCurve("notification-toasts")
+                easing.bezierCurve: Brilliant.easingCurve("notification-toasts", "decelerate")
             }
             NumberAnimation {
                 property: "scale"
@@ -259,21 +266,21 @@ PanelWindow {
                 to: root.slideOffsetX()
                 duration: root.doSlide ? Brilliant.duration("notification-toasts", "normal") : 0
                 easing.type: Easing.BezierSpline
-                easing.bezierCurve: Brilliant.easingCurve("notification-toasts")
+                easing.bezierCurve: Brilliant.easingCurve("notification-toasts", "accelerate")
             }
             NumberAnimation {
                 property: "y"
                 to: root.slideOffsetY()
                 duration: root.doSlide ? Brilliant.duration("notification-toasts", "normal") : 0
                 easing.type: Easing.BezierSpline
-                easing.bezierCurve: Brilliant.easingCurve("notification-toasts")
+                easing.bezierCurve: Brilliant.easingCurve("notification-toasts", "accelerate")
             }
             NumberAnimation {
                 property: "scale"
                 to: root.doScale ? 0.8 : 1
                 duration: root.doScale ? Brilliant.duration("notification-toasts", "normal") : 0
                 easing.type: Easing.BezierSpline
-                easing.bezierCurve: Brilliant.easingCurve("notification-toasts")
+                easing.bezierCurve: Brilliant.easingCurve("notification-toasts", "accelerate")
             }
         }
 
@@ -287,7 +294,7 @@ PanelWindow {
                 properties: "x,y"
                 duration: root.animOn ? Brilliant.duration("notification-toasts", "normal") : 0
                 easing.type: Easing.BezierSpline
-                easing.bezierCurve: Brilliant.easingCurve("notification-toasts")
+                easing.bezierCurve: Brilliant.easingCurve("notification-toasts", "standard")
             }
         }
 

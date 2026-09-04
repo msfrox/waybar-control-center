@@ -127,7 +127,16 @@ QtObject {
     // Radius is BarButton's pill radius deliberately: a plate on the bar that
     // rounds differently from the pills beside it invents a second shape
     // language two centimetres from the first.
-    readonly property real barAlpha: Tokens.opacity.bar              // settings: tokens.opacity.bar
+    // Resolved for surface "bar", NOT "control-center": this file is furniture
+    // for the bar as well as the panels, and the bar is deliberately less
+    // transparent than they are (opacity.bar 0.60 vs opacity.panel 0.30). That
+    // difference is a design-token fact, so surfaces.json points the bar's
+    // `transparency` key at its own token rather than shipping a preset
+    // override to express it. `barPlateAlpha` stays a raw token: a plate is a
+    // component inside the bar, not a surface of its own, and giving it its own
+    // override key would let the two drift apart with nothing naming the
+    // relationship.
+    readonly property real barAlpha: Brilliant.transparency("bar", Tokens.opacity.bar)
     readonly property color barColor: style.withAlpha(Theme.background, style.barAlpha)
     readonly property real barPlateAlpha: Tokens.opacity.barPlate    // settings: tokens.opacity.barPlate
     readonly property color barPlateColor: style.withAlpha(Theme.background, style.barPlateAlpha)
@@ -182,6 +191,12 @@ QtObject {
     // "popouts" caveat: falls back to Theme.fontFamily, today's value, if the
     // store can't be read or no override is set.
     readonly property string fontFamily: Brilliant.fontFamily("control-center", Theme.fontFamily)
+
+    // The bar's own family, resolved for surface "bar". hyprbar's native
+    // modules read `Theme.fontFamily` directly today rather than coming through
+    // here; this is the property they move onto, so the bar can be given a
+    // different family from the panels without either one hardcoding a name.
+    readonly property string barFontFamily: Brilliant.fontFamily("bar", Theme.fontFamily)
     readonly property color textPrimary: Theme.on_surface
     readonly property color textMuted: Theme.outline
     readonly property color textAccent: Theme.primary
