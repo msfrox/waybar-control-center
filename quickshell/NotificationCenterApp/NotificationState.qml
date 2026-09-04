@@ -83,7 +83,23 @@ Singleton {
         root.dnd = !root.dnd
         if (root.dnd) root.toasts = []
         Quickshell.execDetached(["brilliant-setting", "set", "notifications.dnd", root.dnd ? "true" : "false"])
+        // B3.3: DND toggling was silent — ADR-0009 §1 makes this a toast
+        // (transient confirmation of a discrete change, not a value on a
+        // scale and not something the user needs to find again later).
+        Quickshell.execDetached([
+            "qs", "ipc", "call", "toast", "display", "routine",
+            root.dnd ? "Do not disturb on" : "Do not disturb off"
+        ])
     }
+
+    // --- PER-APP MUTE (B3.4) --------------------------------------------------
+    // App names the user has muted, checked ahead of `dnd` in onNotification
+    // below. A muted app's notification is NOT dropped — it still lands in
+    // `live`/history exactly like DND leaves it, just without the toast. That
+    // mirrors DND's existing behaviour and is the reversible choice; the
+    // roadmap flags this as a judgement call and asks it be confirmed with
+    // Shehan rather than assumed silently.
+    property list<var> mutedApps: []
 
     // --- ACTIONS -------------------------------------------------------------
     function clearAll(): void {
@@ -94,7 +110,38 @@ Singleton {
         root.persist()
     }
 
+    // B3.1 / ADR-0009 §2: a settings-preview toast is a synthetic plain
+    // object pushed into `root.toasts` only — it never touches
+    // `server.trackedNotifications`, so `persist()` structurally cannot ever
+    // write it to `~/.cache/hyprbar/notification-history.json`. Property
+    // names match what NotificationEntry.qml's delegate already reads for a
+    // real (or historic) notification, plus `preview: true` so dismiss() and
+    // the toast's own auto-hide timer (NotificationToasts.qml, which already
+    // calls dropToast() directly rather than dismiss()) never try to treat it
+    // as historic or call a `.dismiss()` method it does not have.
+    function preview(): void {
+        root.toasts = [...root.toasts, {
+            preview: true,
+            id: -Date.now(),
+            appName: "Brilliant",
+            appIcon: "",
+            image: "",
+            summary: "Preview",
+            body: "This is what a notification looks like.",
+            urgency: NotificationUrgency.Normal,
+            actions: []
+        }]
+    }
+
     function dismiss(n: var): void {
+        if (n.preview) {
+            // Never entered trackedNotifications or history — just drop the
+            // toast. Neither the historic branch (filters a list this was
+            // never in) nor `n.dismiss()` (no such method on a plain object)
+            // applies here.
+            root.dropToast(n)
+            return
+        }
         if (n.historic) {
             // Nothing to tell the bus about — just forget it.
             root.history = root.history.filter(h => h.at !== n.at || h.summary !== n.summary)
@@ -169,6 +216,12 @@ Singleton {
             // wholesale instead of reading through it.
             notification.closed.connect(() => root.dropToast(notification))
 
+            // B3.4: checked ahead of `dnd`, same suppress-the-toast-not-the-
+            // notification shape — see the `mutedApps` property comment.
+            if (root.mutedApps.includes(notification.appName)) {
+                if (notification.transient) notification.dismiss()
+                return
+            }
             if (root.dnd) {
                 if (notification.transient) notification.dismiss()
                 return
@@ -298,6 +351,7 @@ Singleton {
             root.animation = settings.notifications.animation ?? "slide"
             root.font = settings.notifications.font ?? ""
             root.fontSize = settings.notifications.fontSize ?? 0
+            root.mutedApps = settings.notifications.mutedApps ?? []
         }
 
         // No settings file yet is the normal first-run case, not an error.
@@ -310,6 +364,7 @@ Singleton {
             root.animation = "slide"
             root.font = ""
             root.fontSize = 0
+            root.mutedApps = []
         }
 
         JsonAdapter {
@@ -328,7 +383,8 @@ Singleton {
                 position: "bottom-right",
                 animation: "slide",
                 font: "",
-                fontSize: 0
+                fontSize: 0,
+                mutedApps: []
             })
         }
     }
@@ -355,5 +411,6 @@ Singleton {
         function dnd(): bool { return root.dnd }
         function count(): int { return root.count }
         function clearAll(): void { root.clearAll() }
+        function preview(): void { root.preview() }
     }
 }

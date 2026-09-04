@@ -292,9 +292,31 @@ PanelWindow {
 
     // Runs a shell command and stays open, then re-reads state so the tile's
     // active styling catches up with what just happened.
-    Process { id: toggleProc; onExited: root.refresh() }
+    //
+    // B3.3: this is the one dispatch point every toggle-shaped quick action
+    // (Wi-Fi, Bluetooth, Mute, Keep awake, Night light, Power profile, Game
+    // mode, Fastfetch) already runs through, so it is also the one place a
+    // confirmation toast belongs — per ADR-0009 §1, a quick action fired
+    // while the panel is open and the user is watching is transient
+    // feedback, not something that needs to survive in the notification
+    // centre. `actionLabel` is optional so a caller that has no good short
+    // description can skip the toast rather than send an empty one.
+    Process {
+        id: toggleProc
+        property string actionLabel: ""
+        onExited: {
+            root.refresh()
+            if (toggleProc.actionLabel !== "") {
+                Quickshell.execDetached([
+                    "qs", "ipc", "call", "toast", "display", "routine",
+                    toggleProc.actionLabel
+                ])
+            }
+        }
+    }
 
-    function toggleAction(command) {
+    function toggleAction(command, actionLabel) {
+        toggleProc.actionLabel = actionLabel !== undefined ? actionLabel : ""
         toggleProc.command = ["bash", "-c", command]
         toggleProc.running = true
     }
@@ -1161,7 +1183,8 @@ PanelWindow {
                                 active: !!root.tool("wifi_enabled")
                                 hint: "Toggle the Wi-Fi radio"
                                 onTriggered: root.toggleAction(
-                                    "nmcli radio wifi " + (root.tool("wifi_enabled") ? "off" : "on"))
+                                    "nmcli radio wifi " + (root.tool("wifi_enabled") ? "off" : "on"),
+                                    root.tool("wifi_enabled") ? "Wi-Fi off" : "Wi-Fi on")
                             }
 
                             ToolTile {
@@ -1170,7 +1193,9 @@ PanelWindow {
                                 detail: root.tool("bluetooth_enabled") ? "Bluetooth" : "BT off"
                                 active: !!root.tool("bluetooth_enabled")
                                 hint: "Toggle the Bluetooth radio (rfkill)"
-                                onTriggered: root.toggleAction("rfkill toggle bluetooth")
+                                onTriggered: root.toggleAction(
+                                    "rfkill toggle bluetooth",
+                                    root.tool("bluetooth_enabled") ? "Bluetooth off" : "Bluetooth on")
                             }
 
                             ToolTile {
@@ -1179,6 +1204,10 @@ PanelWindow {
                                 detail: root.tool("muted") ? "Muted" : "Sound on"
                                 active: !!root.tool("muted")
                                 hint: "Mute or unmute the default output"
+                                // No toast label: mute already has its own OSD
+                                // meter feedback (OsdWindow.qml, live off
+                                // PipeWire — B3.3's "already correct, do not
+                                // regress" list). A toast here would double up.
                                 onTriggered: root.toggleAction(
                                     "wpctl set-mute @DEFAULT_AUDIO_SINK@ toggle")
                             }
@@ -1218,13 +1247,20 @@ PanelWindow {
                                         ? "Awake" : "Auto-sleep"
                                 active: !!(root.stats.tools && root.stats.tools.idle_inhibited)
                                 onTriggered: root.toggleAction(
-                                    Quickshell.env("HOME") + "/.config/hypr/scripts/hypridle.sh toggle")
+                                    Quickshell.env("HOME") + "/.config/hypr/scripts/hypridle.sh toggle",
+                                    root.stats.tools && root.stats.tools.idle_inhibited
+                                        ? "Auto-sleep restored" : "Staying awake")
                             }
 
                             ToolTile {
                                 glyph: "nightlight"
                                 label: "Night light"
                                 hint: "Toggle the warm screen shader (hyprsunset)"
+                                // No toast label here on purpose: hyprsunset-toggle.sh
+                                // is on B3.3's separate "should gain a toast" list
+                                // (its own IPC call, with a notify-send fallback) —
+                                // that script runs from this same tile as well as a
+                                // keybind, so toasting here too would double it up.
                                 onTriggered: root.toggleAction(
                                     "sleep 0.3; " + Quickshell.env("HOME")
                                     + "/.config/hypr/shehan/bin/hyprsunset-toggle.sh")
@@ -1247,6 +1283,15 @@ PanelWindow {
                                     const next = profile === "power-saver" ? "balanced"
                                                : profile === "balanced" ? "performance"
                                                : "power-saver"
+                                    // No toast label: PowerPopout.qml listens
+                                    // to PowerProfiles.onProfileChanged
+                                    // directly and already toasts on every
+                                    // profile change regardless of trigger
+                                    // (this tile, the popout's own slider, or
+                                    // powerprofilesctl from a terminal) — a
+                                    // label here would double it up, same as
+                                    // the mute/night-light/game-mode tiles
+                                    // above.
                                     root.toggleAction("powerprofilesctl set " + next)
                                 }
                             }
@@ -1319,6 +1364,11 @@ PanelWindow {
                                 glyph: "sports_esports"
                                 label: "Game mode"
                                 hint: "Toggle gamemode (drops effects and animations)"
+                                // No toast label here on purpose: gamemode.sh is on
+                                // B3.3's separate "should gain a toast" list (its own
+                                // IPC call, with a notify-send fallback) — it runs
+                                // from this same tile as well as a keybind, so
+                                // toasting here too would double it up.
                                 onTriggered: root.toggleAction(
                                     Quickshell.env("HOME") + "/.config/hypr/scripts/gamemode.sh")
                             }
@@ -1329,7 +1379,8 @@ PanelWindow {
                                 label: "Fastfetch"
                                 hint: "Show or hide fastfetch in new terminals"
                                 onTriggered: root.toggleAction(
-                                    Quickshell.env("HOME") + "/.config/hypr/shehan/bin/fastfetch-toggle.sh")
+                                    Quickshell.env("HOME") + "/.config/hypr/shehan/bin/fastfetch-toggle.sh",
+                                    "Fastfetch toggled")
                             }
 
                             // A standalone GTK4/libadwaita app, deliberately not part of
