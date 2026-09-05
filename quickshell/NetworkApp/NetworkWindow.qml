@@ -60,6 +60,14 @@ PanelWindow {
             if (wifiDevice) wifiDevice.scannerEnabled = false
             pskFor = null
             pskText = ""
+            // The rate graph's own history is NOT reset here - it lives in
+            // the daemon's published ring buffer (`liveRateFile`), not in
+            // this popup, precisely so it keeps covering the last 5 minutes
+            // across a close/reopen instead of going blank. Only this
+            // popup's own local UI state (the connections list fetch) is
+            // session-scoped.
+            connectionsOpen = false
+            root.connections = []
             BarReveal.release("network")
         }
     }
@@ -125,51 +133,183 @@ PanelWindow {
 
     // --- THROUGHPUT ---
     //
-    // Own Process and its own, faster tick, deliberately separate from the
-    // details poll above: network-throughput.py is a couple of /proc file
-    // reads with no subprocess, cheap enough for a 2s tick that makes the
-    // graph actually look like it's moving, where 5s exists specifically to
-    // keep the nmcli/tailscale calls infrequent. This used to be two InfoPills
-    // in the Control Center's System section (Down/Up rate only, no totals,
-    // no history) - moved here because throughput is a network fact, not a
-    // system one, and gained the totals/peak/graph the pills never had room for.
-    property var throughput: ({})
+    // Backed by `brilliant-network`, not network-throughput.py (deleted -
+    // B7 step 2, 2026-09-05): that script and this daemon's own `rate`
+    // subcommand were "two front ends, one feature" (measurement vs.
+    // presentation).
+    //
+    // 🔴 Not a `rate` Process on a timer, either - that was this file's own
+    // first draft this session, and Shehan caught the flaw immediately:
+    // "it only updates or works when the panel is open... so its basically
+    // useless as is [...] it should show last 5 minutes usage there." A
+    // Process the popup itself starts cannot show history from before the
+    // popup existed. So the daemon now publishes a rolling 5-minute ring
+    // buffer continuously, popup open or not (`live_publish.rs`,
+    // `~/Projects/brilliant-daemons`) - the exact "bounded ring buffer"
+    // fix this batch's own spec already named as the escape hatch. This
+    // panel just reads that file, the same watched-FileView pattern
+    // `tokens.json` and `brilliant.json` already use elsewhere in this
+    // codebase: no polling, no Process, pushed the instant the daemon
+    // writes. Opening the popup after five minutes away shows a full
+    // graph on the very first frame, because the buffer was never empty.
+    readonly property string liveRatePath: {
+        const xdg = Quickshell.env("XDG_DATA_HOME")
+        const base = (xdg && xdg !== "") ? xdg : (Quickshell.env("HOME") + "/.local/share")
+        return base + "/brilliant/network-live.json"
+    }
+
+    property var liveSamples: []  // oldest first; each {at, rates: [{name, kind, rx_bytes_per_second, tx_bytes_per_second, default_route}]}
+
+    FileView {
+        id: liveRateFile
+        path: root.liveRatePath
+        watchChanges: true
+        onFileChanged: reload()
+        onLoaded: {
+            try {
+                const parsed = JSON.parse(liveRateFile.text())
+                root.liveSamples = Array.isArray(parsed.samples) ? parsed.samples : []
+            } catch (e) {
+                root.liveSamples = []
+            }
+        }
+        // Nothing collected yet (daemon just installed, or its very first
+        // tick hasn't landed) is the normal first-run case, not an error -
+        // same contract `network-usage.json` documents.
+        onLoadFailed: (error) => root.liveSamples = []
+    }
+
+    // One rx/tx pair per sample, oldest first, for `name` - "total" sums
+    // every interface in that sample. An interface absent from a given
+    // sample (came up mid-window) reads as 0 for it, not a gap, so the
+    // series stays one point per sample.
+    function rateSeriesFor(name) {
+        const rx = [], tx = []
+        for (const sample of root.liveSamples) {
+            if (name === "total") {
+                let r = 0, t = 0
+                for (const e of sample.rates) { r += e.rx_bytes_per_second; t += e.tx_bytes_per_second }
+                rx.push(r); tx.push(t)
+            } else {
+                const hit = sample.rates.find(e => e.name === name)
+                rx.push(hit ? hit.rx_bytes_per_second : 0)
+                tx.push(hit ? hit.tx_bytes_per_second : 0)
+            }
+        }
+        return { rx, tx }
+    }
+
+    property var ifaceLifetimes: ({})  // name -> {rx_bytes, tx_bytes}, from `interfaces` - cumulative "Total" needs a running counter a rate sample doesn't carry.
+
+    // --- DATA USAGE state (properties only - the Process/Timer/UI live
+    // with the section below, but `onXChanged` handlers and cross-item
+    // bindings need these declared where `root.` actually resolves them) ---
+    property int usagePeriodDays: 30
+    property var usageData: ({})
+    readonly property var usageDays: {
+        const days = root.usageData.days || {}
+        return Object.keys(days).sort()
+    }
+    readonly property var usageSeries: {
+        const days = root.usageData.days || {}
+        return root.usageDays.map(d => days[d].rx + days[d].tx)
+    }
+    // Re-fetch immediately when the period changes rather than waiting for
+    // the next 60s tick (`usageProc`/its Timer are declared with the
+    // Data usage section below; the id is visible document-wide).
+    onUsagePeriodDaysChanged: if (root.isOpen && !usageProc.running) usageProc.running = true
+
+    // --- CONNECTIONS state ---
+    property bool connectionsOpen: false
+    property var connections: []
+
+    // Both collapsed by default, same reasoning as Connections above -
+    // Shehan, 2026-09-05, after the panel overflowed the screen once every
+    // section this batch touched was expanded at once: "make the connection
+    // info and the tailscale sections collapseable."
+    property bool connectionDetailsOpen: false
+    property bool tailscaleDetailsOpen: false
 
     Process {
-        id: throughputProc
-        command: [Quickshell.env("HOME") + "/.config/brilliant/providers/network-throughput.py"]
+        id: interfacesProc
+        command: [Quickshell.env("HOME") + "/.local/bin/brilliant-network", "interfaces"]
         stdout: StdioCollector {
             onStreamFinished: {
                 try {
-                    root.throughput = JSON.parse(this.text)
+                    const list = JSON.parse(this.text)
+                    const map = {}
+                    for (const i of list) map[i.name] = i
+                    root.ifaceLifetimes = map
                 } catch (e) {
-                    root.throughput = {}
+                    root.ifaceLifetimes = {}
                 }
             }
         }
     }
 
+    // Shares the details poll's 5s cadence - link state and lifetime
+    // counters don't need the rate ring buffer's 2s freshness.
     Timer {
-        interval: 2000
+        interval: 5000
         repeat: true
         triggeredOnStart: true
         running: root.isOpen
-        onTriggered: if (!throughputProc.running) throughputProc.running = true
+        onTriggered: if (!interfacesProc.running) interfacesProc.running = true
     }
 
-    // "" means auto: follow the backend's default-route pick (root.throughput.default)
-    // rather than pinning to whatever that happened to be on the first read, so
-    // it keeps tracking correctly through a wifi/ethernet handover. Picking an
-    // explicit interface (or "total") in the dropdown below overrides that.
+    // "" means auto: follow whichever interface the latest sample marks
+    // default_route, rather than pinning to whatever that happened to be on
+    // first read, so it keeps tracking correctly through a wifi/ethernet
+    // handover. Picking an explicit interface (or "total") below overrides it.
     property string selectedIface: ""
     property bool ifaceMenuOpen: false
 
+    // The interfaces the ring buffer currently knows about - the latest
+    // sample's own list, so a picker built from this never offers an
+    // interface that vanished five minutes ago.
+    readonly property var liveIfaceNames: {
+        if (root.liveSamples.length === 0) return []
+        return root.liveSamples[root.liveSamples.length - 1].rates.map(e => e.name)
+    }
+
+    readonly property string autoIfaceName: {
+        if (root.liveSamples.length === 0) return ""
+        const latest = root.liveSamples[root.liveSamples.length - 1]
+        const hit = latest.rates.find(e => e.default_route)
+        return hit ? hit.name : ""
+    }
+
+    readonly property string effectiveIface: root.selectedIface !== "" ? root.selectedIface
+        : (root.autoIfaceName !== "" ? root.autoIfaceName : "total")
+
     readonly property var throughputEntry: {
-        const byIface = root.throughput.by_iface || {}
-        const auto = root.throughput.default
-        const key = root.selectedIface !== "" ? root.selectedIface
-                  : (auto && byIface[auto] ? auto : "total")
-        return byIface[key] || {}
+        const key = root.effectiveIface
+        const series = root.rateSeriesFor(key)
+        const rxRate = series.rx.length > 0 ? series.rx[series.rx.length - 1] : 0
+        const txRate = series.tx.length > 0 ? series.tx[series.tx.length - 1] : 0
+        const topRx = series.rx.reduce((m, v) => Math.max(m, v), 0)
+        const topTx = series.tx.reduce((m, v) => Math.max(m, v), 0)
+
+        let rxTotal = null, txTotal = null
+        if (key === "total") {
+            let rxSum = 0, txSum = 0, any = false
+            for (const name in root.ifaceLifetimes) {
+                rxSum += root.ifaceLifetimes[name].rx_bytes
+                txSum += root.ifaceLifetimes[name].tx_bytes
+                any = true
+            }
+            if (any) { rxTotal = rxSum; txTotal = txSum }
+        } else {
+            const life = root.ifaceLifetimes[key]
+            if (life) { rxTotal = life.rx_bytes; txTotal = life.tx_bytes }
+        }
+
+        return {
+            rx_rate: rxRate, tx_rate: txRate,
+            rx_total: rxTotal, tx_total: txTotal,
+            top_rx: topRx, top_tx: topTx,
+            history: { rx: series.rx, tx: series.tx },
+        }
     }
 
     function humanBytes(bytes) {
@@ -280,48 +420,50 @@ PanelWindow {
     // total/peak clause underneath - the same "value now, provenance
     // underneath" shape DetailRow uses, with a bigger trailing number because
     // this is the thing this section exists to show.
-    component ThroughputRow: RowLayout {
-        id: trow
+    // Two of these sit side by side (Down/Up, Downloaded/Uploaded) rather
+    // than stacking as full-width rows - Shehan's call, 2026-09-05, after
+    // the first draft's row-per-stat layout ran the popup taller than the
+    // screen: "format that so its two boxes next to each other not a list."
+    component StatBox: ColumnLayout {
+        id: box
         required property string glyph
         required property string label
         property string value: "—"
         property string note: ""
 
         Layout.fillWidth: true
-        spacing: PanelStyle.panelSpacing
+        Layout.leftMargin: Tokens.space.md
+        spacing: Tokens.space.none
 
-        Glyph {
-            text: trow.glyph
-            font.pixelSize: 18
-            leftPadding: Tokens.space.md
-        }
+        RowLayout {
+            spacing: Tokens.space.xs
 
-        ColumnLayout {
-            Layout.fillWidth: true
-            spacing: Tokens.space.none
+            Glyph { text: box.glyph; font.pixelSize: 15 }
 
             Text {
-                text: trow.label
+                text: box.label
                 font.family: Theme.fontFamily
                 font.pixelSize: 11
-                color: Theme.outline
-            }
-
-            Text {
-                visible: trow.note !== ""
-                text: trow.note
-                font.family: Theme.fontFamily
-                font.pixelSize: 10
                 color: Theme.outline
             }
         }
 
         Text {
-            text: trow.value
+            text: box.value
             font.family: Theme.fontFamily
-            font.pixelSize: 13
+            font.pixelSize: 15
             font.bold: true
             color: Theme.on_surface
+        }
+
+        Text {
+            Layout.fillWidth: true
+            visible: box.note !== ""
+            text: box.note
+            font.family: Theme.fontFamily
+            font.pixelSize: 9
+            color: Theme.outline
+            wrapMode: Text.Wrap
         }
     }
 
@@ -495,7 +637,7 @@ PanelWindow {
                     // "Auto" first (follows the default route), then every
                     // interface the backend is currently reading, then the
                     // combined total last.
-                    model: [""].concat(root.throughput.interfaces || []).concat(["total"])
+                    model: [""].concat(root.liveIfaceNames).concat(["total"])
 
                     Rectangle {
                         id: ifaceOption
@@ -537,20 +679,25 @@ PanelWindow {
                 Layout.fillWidth: true
                 spacing: Tokens.space.xxs
 
-                ThroughputRow {
-                    glyph: "download"
-                    label: "Down"
-                    value: root.humanRate(root.throughputEntry.rx_rate)
-                    note: "Total " + root.humanBytes(root.throughputEntry.rx_total)
-                          + "  ·  Top " + root.humanRate(root.throughputEntry.top_rx)
-                }
+                RowLayout {
+                    Layout.fillWidth: true
+                    spacing: PanelStyle.panelSpacing
 
-                ThroughputRow {
-                    glyph: "upload"
-                    label: "Up"
-                    value: root.humanRate(root.throughputEntry.tx_rate)
-                    note: "Total " + root.humanBytes(root.throughputEntry.tx_total)
-                          + "  ·  Top " + root.humanRate(root.throughputEntry.top_tx)
+                    StatBox {
+                        glyph: "download"
+                        label: "Down"
+                        value: root.humanRate(root.throughputEntry.rx_rate)
+                        note: "Total " + root.humanBytes(root.throughputEntry.rx_total)
+                              + " · Top " + root.humanRate(root.throughputEntry.top_rx)
+                    }
+
+                    StatBox {
+                        glyph: "upload"
+                        label: "Up"
+                        value: root.humanRate(root.throughputEntry.tx_rate)
+                        note: "Total " + root.humanBytes(root.throughputEntry.tx_total)
+                              + " · Top " + root.humanRate(root.throughputEntry.top_tx)
+                    }
                 }
 
                 // Both series autoscale independently (Sparkline's default),
@@ -576,6 +723,137 @@ PanelWindow {
                         samples: root.throughputEntry.history ? root.throughputEntry.history.tx : []
                         lineColor: Theme.tertiary
                     }
+                }
+            }
+
+            Divider {}
+
+            // --- DATA USAGE ---
+            //
+            // The popup's throughput block used to be annotated "(no
+            // history)" - this is the history, and the reason
+            // `brilliant-network` exists at all (§B7 step 1): kernel
+            // counters reset every reboot, so a persistent collector was
+            // the only way to answer "how much have I used this month."
+            // `total_physical` (wired + wireless only) is what's shown here,
+            // not a sum across every interface - tunnel traffic rides over
+            // the physical NIC it tunnels through, so summing double-counts
+            // every VPN byte (the exact bug `network-throughput.py`'s old
+            // "total" had, per [[26-path-to-v1]] §B7). The full arbitrary
+            // date-range filter is the settings page's job, not this
+            // popup's - this shows the common cases at a glance.
+            Process {
+                id: usageProc
+                command: [Quickshell.env("HOME") + "/.local/bin/brilliant-network",
+                          "usage", "--days", String(root.usagePeriodDays)]
+                stdout: StdioCollector {
+                    onStreamFinished: {
+                        try {
+                            root.usageData = JSON.parse(this.text)
+                        } catch (e) {
+                            root.usageData = {}
+                        }
+                    }
+                }
+            }
+
+            // Usage history doesn't need the rate tick's freshness - once on
+            // open, and a slow re-check in case the popup is left open
+            // across midnight.
+            Timer {
+                interval: 60000
+                repeat: true
+                triggeredOnStart: true
+                running: root.isOpen
+                onTriggered: if (!usageProc.running) usageProc.running = true
+            }
+
+            RowLayout {
+                Layout.fillWidth: true
+
+                SectionLabel { Layout.fillWidth: true; text: "Data usage" }
+
+                Repeater {
+                    model: [7, 30, 90]
+
+                    Rectangle {
+                        id: periodChip
+                        required property int modelData
+                        readonly property bool current: modelData === root.usagePeriodDays
+
+                        implicitHeight: 20
+                        implicitWidth: periodLabel.implicitWidth + 14
+                        radius: PanelStyle.chipRadius
+                        color: current ? PanelStyle.fillHover
+                             : periodMouse.containsMouse ? PanelStyle.fillSubtle : "transparent"
+
+                        Text {
+                            id: periodLabel
+                            anchors.centerIn: parent
+                            text: periodChip.modelData + "d"
+                            font.family: Theme.fontFamily
+                            font.pixelSize: 10
+                            color: periodChip.current ? Theme.primary : Theme.outline
+                        }
+
+                        MouseArea {
+                            id: periodMouse
+                            anchors.fill: parent
+                            hoverEnabled: true
+                            cursorShape: Qt.PointingHandCursor
+                            onClicked: root.usagePeriodDays = periodChip.modelData
+                        }
+                    }
+                }
+            }
+
+            ColumnLayout {
+                Layout.fillWidth: true
+                spacing: Tokens.space.xxs
+
+                RowLayout {
+                    Layout.fillWidth: true
+                    spacing: PanelStyle.panelSpacing
+
+                    StatBox {
+                        glyph: "south"
+                        label: "Downloaded"
+                        value: root.humanBytes(root.usageData.total_physical ? root.usageData.total_physical.rx : null)
+                        note: "Last " + root.usagePeriodDays + " days · wired + wireless"
+                    }
+
+                    StatBox {
+                        glyph: "north"
+                        label: "Uploaded"
+                        value: root.humanBytes(root.usageData.total_physical ? root.usageData.total_physical.tx : null)
+                        note: "Last " + root.usagePeriodDays + " days · wired + wireless"
+                    }
+                }
+
+                Item {
+                    Layout.fillWidth: true
+                    Layout.preferredHeight: 24
+                    Layout.topMargin: Tokens.space.xs
+                    Layout.leftMargin: Tokens.space.md
+                    Layout.rightMargin: Tokens.space.md
+                    visible: root.usageSeries.length > 1
+
+                    Sparkline {
+                        anchors.fill: parent
+                        samples: root.usageSeries
+                        lineColor: Theme.secondary
+                    }
+                }
+
+                Text {
+                    Layout.fillWidth: true
+                    Layout.leftMargin: Tokens.space.md
+                    visible: root.usageDays.length > 0
+                    text: "Daily total, oldest → newest, " + root.usageDays.length + " day"
+                          + (root.usageDays.length === 1 ? "" : "s") + " recorded"
+                    font.family: Theme.fontFamily
+                    font.pixelSize: 9
+                    color: Theme.outline
                 }
             }
 
@@ -859,15 +1137,35 @@ PanelWindow {
             // panel instead of showing a tooltip.
             Divider { visible: root.details.wifi !== undefined && root.details.wifi !== null }
 
-            SectionLabel {
-                text: "Connection"
+            RowLayout {
+                Layout.fillWidth: true
                 visible: root.details.wifi !== undefined && root.details.wifi !== null
+                spacing: PanelStyle.panelSpacing
+
+                SectionLabel { Layout.fillWidth: true; text: "Connection" }
+
+                Text {
+                    text: root.connectionDetailsOpen ? "Hide" : "Show"
+                    font.family: Theme.fontFamily
+                    font.pixelSize: 11
+                    color: connDetailsToggle.containsMouse ? Theme.primary : Theme.outline
+
+                    MouseArea {
+                        id: connDetailsToggle
+                        anchors.fill: parent
+                        anchors.margins: -6
+                        hoverEnabled: true
+                        cursorShape: Qt.PointingHandCursor
+                        onClicked: root.connectionDetailsOpen = !root.connectionDetailsOpen
+                    }
+                }
             }
 
             ColumnLayout {
                 Layout.fillWidth: true
                 spacing: 3
-                visible: root.details.wifi !== undefined && root.details.wifi !== null
+                visible: root.connectionDetailsOpen
+                         && root.details.wifi !== undefined && root.details.wifi !== null
 
                 DetailRow { label: "Network"; value: root.details.wifi ? (root.details.wifi.ssid || "") : "" }
                 DetailRow { label: "Interface"; value: root.details.wifi ? (root.details.wifi.interface || "") : "" }
@@ -923,6 +1221,22 @@ PanelWindow {
                         }
                     }
                 }
+
+                Text {
+                    text: root.tailscaleDetailsOpen ? "Hide" : "Show"
+                    font.family: Theme.fontFamily
+                    font.pixelSize: 11
+                    color: tsDetailsToggle.containsMouse ? Theme.primary : Theme.outline
+
+                    MouseArea {
+                        id: tsDetailsToggle
+                        anchors.fill: parent
+                        anchors.margins: -6
+                        hoverEnabled: true
+                        cursorShape: Qt.PointingHandCursor
+                        onClicked: root.tailscaleDetailsOpen = !root.tailscaleDetailsOpen
+                    }
+                }
             }
 
             Timer {
@@ -935,7 +1249,8 @@ PanelWindow {
             ColumnLayout {
                 Layout.fillWidth: true
                 spacing: 3
-                visible: root.details.tailscale !== undefined && root.details.tailscale !== null
+                visible: root.tailscaleDetailsOpen
+                         && root.details.tailscale !== undefined && root.details.tailscale !== null
 
                 DetailRow {
                     label: "Status"
@@ -957,6 +1272,129 @@ PanelWindow {
                            ? root.details.tailscale.peers_online + " of "
                              + root.details.tailscale.peers_total + " online"
                            : ""
+                }
+                // VPN status, the original B7 spec line: `interfaces` already
+                // reports kind:"tunnel" with link state - that's the read
+                // behind this row, so it's real information (does the
+                // tunnel's own network interface have a carrier right now),
+                // not a duplicate of the "Status"/"online" row above (which
+                // comes from `tailscale status`, a different fact).
+                DetailRow {
+                    label: "Link"
+                    value: {
+                        const tun = Object.values(root.ifaceLifetimes).find(i => i.kind === "tunnel")
+                        if (!tun) return ""
+                        return tun.carrier ? "Up (" + tun.operstate + ")" : "No carrier"
+                    }
+                }
+            }
+
+            // --- CONNECTIONS ---
+            // New surface capability, [[26-path-to-v1]] §B7 step 2 item 4:
+            // what this machine is talking to right now. Collapsed by
+            // default and only polled while expanded - process attribution
+            // walks /proc/*/fd per socket, which is not something to spend
+            // on a section nobody is looking at.
+            Divider {}
+
+            RowLayout {
+                Layout.fillWidth: true
+
+                SectionLabel { Layout.fillWidth: true; text: "Connections" }
+
+                Text {
+                    text: root.connectionsOpen ? "Hide" : "Show"
+                    font.family: Theme.fontFamily
+                    font.pixelSize: 11
+                    color: connToggle.containsMouse ? Theme.primary : Theme.outline
+
+                    MouseArea {
+                        id: connToggle
+                        anchors.fill: parent
+                        anchors.margins: -6
+                        hoverEnabled: true
+                        cursorShape: Qt.PointingHandCursor
+                        onClicked: root.connectionsOpen = !root.connectionsOpen
+                    }
+                }
+            }
+
+            Process {
+                id: connectionsProc
+                command: [Quickshell.env("HOME") + "/.local/bin/brilliant-network", "connections", "--established"]
+                stdout: StdioCollector {
+                    onStreamFinished: {
+                        try {
+                            root.connections = JSON.parse(this.text)
+                        } catch (e) {
+                            root.connections = []
+                        }
+                    }
+                }
+            }
+
+            Timer {
+                interval: 5000
+                repeat: true
+                triggeredOnStart: true
+                running: root.isOpen && root.connectionsOpen
+                onTriggered: if (!connectionsProc.running) connectionsProc.running = true
+            }
+
+            ColumnLayout {
+                Layout.fillWidth: true
+                spacing: Tokens.space.hairline
+                visible: root.connectionsOpen
+
+                Repeater {
+                    // Capped at 12 - this is a glance, not a netstat replacement.
+                    model: root.connections.slice(0, 12)
+
+                    RowLayout {
+                        required property var modelData
+                        Layout.fillWidth: true
+                        Layout.leftMargin: Tokens.space.md
+                        Layout.rightMargin: Tokens.space.md
+                        spacing: Tokens.space.sm
+
+                        Text {
+                            Layout.preferredWidth: 90
+                            // A socket owned by another user shows no PID -
+                            // "unknown", per ADR-0014 §5, never an error.
+                            text: modelData.process || "unknown"
+                            font.family: Theme.fontFamily
+                            font.pixelSize: 11
+                            color: Theme.on_surface
+                            elide: Text.ElideRight
+                        }
+
+                        Text {
+                            Layout.fillWidth: true
+                            text: modelData.remote_address + ":" + modelData.remote_port
+                            font.family: Theme.fontFamily
+                            font.pixelSize: 10
+                            color: Theme.outline
+                            elide: Text.ElideRight
+                        }
+                    }
+                }
+
+                Text {
+                    visible: root.connections.length > 12
+                    Layout.leftMargin: Tokens.space.md
+                    text: (root.connections.length - 12) + " more…"
+                    font.family: Theme.fontFamily
+                    font.pixelSize: 10
+                    color: Theme.outline
+                }
+
+                Text {
+                    visible: root.connectionsOpen && root.connections.length === 0
+                    Layout.leftMargin: Tokens.space.md
+                    text: "No established connections"
+                    font.family: Theme.fontFamily
+                    font.pixelSize: 11
+                    color: Theme.outline
                 }
             }
 
