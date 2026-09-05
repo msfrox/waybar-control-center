@@ -28,7 +28,12 @@ PanelWindow {
     exclusionMode: WlrLayershell.Ignore
 
     implicitWidth: 420
-    implicitHeight: Math.min(content.implicitHeight + 80, 900)
+    // A flat 900 (this file's original cap) overflows a real screen once
+    // enough sections are open at once - Shehan, 2026-09-05: "the details
+    // are still overflowing below the window." AudioWindow.qml already
+    // caps against the actual screen instead; this matches that pattern.
+    implicitHeight: Math.min(content.implicitHeight + 80,
+                             (screen ? screen.height : 1080) - 140)
     color: "transparent"
 
     anchors {
