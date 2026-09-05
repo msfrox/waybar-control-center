@@ -1353,61 +1353,64 @@ PanelWindow {
                 onTriggered: if (!connectionsProc.running) connectionsProc.running = true
             }
 
-            ColumnLayout {
+            // Bounded height + its own scroll, rather than either capping
+            // the list or letting it grow the whole popup - Shehan,
+            // 2026-09-05, after a machine with 50+ live sockets made both
+            // of those look broken in different ways ("only showing a
+            // partial list", then "still overflowing"). This is the one
+            // deliberate exception to this file's otherwise
+            // grow-to-fit-content sections.
+            ScrollView {
                 Layout.fillWidth: true
-                spacing: Tokens.space.hairline
-                visible: root.connectionsOpen
+                Layout.preferredHeight: Math.min(contentHeight, 220)
+                visible: root.connectionsOpen && root.connections.length > 0
+                clip: true
 
-                Repeater {
-                    // Capped at 12 - this is a glance, not a netstat replacement.
-                    model: root.connections.slice(0, 12)
+                ColumnLayout {
+                    width: parent.width
+                    spacing: Tokens.space.hairline
 
-                    RowLayout {
-                        required property var modelData
-                        Layout.fillWidth: true
-                        Layout.leftMargin: Tokens.space.md
-                        Layout.rightMargin: Tokens.space.md
-                        spacing: Tokens.space.sm
+                    Repeater {
+                        model: root.connections
 
-                        Text {
-                            Layout.preferredWidth: 90
-                            // A socket owned by another user shows no PID -
-                            // "unknown", per ADR-0014 §5, never an error.
-                            text: modelData.process || "unknown"
-                            font.family: Theme.fontFamily
-                            font.pixelSize: 11
-                            color: Theme.on_surface
-                            elide: Text.ElideRight
-                        }
-
-                        Text {
+                        RowLayout {
+                            required property var modelData
                             Layout.fillWidth: true
-                            text: modelData.remote_address + ":" + modelData.remote_port
-                            font.family: Theme.fontFamily
-                            font.pixelSize: 10
-                            color: Theme.outline
-                            elide: Text.ElideRight
+                            Layout.leftMargin: Tokens.space.md
+                            Layout.rightMargin: Tokens.space.md
+                            spacing: Tokens.space.sm
+
+                            Text {
+                                Layout.preferredWidth: 90
+                                // A socket owned by another user shows no PID -
+                                // "unknown", per ADR-0014 §5, never an error.
+                                text: modelData.process || "unknown"
+                                font.family: Theme.fontFamily
+                                font.pixelSize: 11
+                                color: Theme.on_surface
+                                elide: Text.ElideRight
+                            }
+
+                            Text {
+                                Layout.fillWidth: true
+                                text: modelData.remote_address + ":" + modelData.remote_port
+                                font.family: Theme.fontFamily
+                                font.pixelSize: 10
+                                color: Theme.outline
+                                elide: Text.ElideRight
+                            }
                         }
                     }
                 }
+            }
 
-                Text {
-                    visible: root.connections.length > 12
-                    Layout.leftMargin: Tokens.space.md
-                    text: (root.connections.length - 12) + " more…"
-                    font.family: Theme.fontFamily
-                    font.pixelSize: 10
-                    color: Theme.outline
-                }
-
-                Text {
-                    visible: root.connectionsOpen && root.connections.length === 0
-                    Layout.leftMargin: Tokens.space.md
-                    text: "No established connections"
-                    font.family: Theme.fontFamily
-                    font.pixelSize: 11
-                    color: Theme.outline
-                }
+            Text {
+                visible: root.connectionsOpen && root.connections.length === 0
+                Layout.leftMargin: Tokens.space.md
+                text: "No established connections"
+                font.family: Theme.fontFamily
+                font.pixelSize: 11
+                color: Theme.outline
             }
 
             Item { Layout.fillHeight: true }
