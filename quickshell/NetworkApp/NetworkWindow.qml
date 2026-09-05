@@ -564,7 +564,7 @@ PanelWindow {
                            : "transparent"
 
                     ToolTip.visible: settingsMouse.containsMouse
-                    ToolTip.text: "Open nm-connection-editor"
+                    ToolTip.text: "Open Network in Settings"
                     ToolTip.delay: 400
 
                     Glyph { anchors.centerIn: parent; text: "tune"; font.pixelSize: 17 }
@@ -575,7 +575,14 @@ PanelWindow {
                         hoverEnabled: true
                         cursorShape: Qt.PointingHandCursor
                         onClicked: {
-                            Quickshell.execDetached(["nm-connection-editor"])
+                            // Was nm-connection-editor - Shehan, 2026-09-05:
+                            // "reroute that setting icon to our settings
+                            // app." hyprsys's own Network page (this
+                            // batch's other half) is the real destination
+                            // now; nm-connection-editor is still reachable
+                            // from there as that page's own delegation
+                            // fallback if it's ever needed.
+                            Quickshell.execDetached(["hyprsys", "--page", "network"])
                             root.isOpen = false
                         }
                     }
@@ -779,7 +786,7 @@ PanelWindow {
                 SectionLabel { Layout.fillWidth: true; text: "Data usage" }
 
                 Repeater {
-                    model: [7, 30, 90]
+                    model: [1, 7, 30]
 
                     Rectangle {
                         id: periodChip
