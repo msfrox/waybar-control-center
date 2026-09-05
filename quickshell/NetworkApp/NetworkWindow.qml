@@ -219,6 +219,19 @@ PanelWindow {
         const days = root.usageData.days || {}
         return root.usageDays.map(d => days[d].rx + days[d].tx)
     }
+    // Follows the Throughput picker above, Shehan's ask 2026-09-05 - "total"
+    // (or nothing collected yet for the picked interface) falls back to
+    // total_physical, the one number guaranteed not to double-count a
+    // tunnel over the physical NIC it rides. The daily chart above stays
+    // physical-only regardless of this pick - the daemon has no
+    // per-interface daily breakdown to draw one from (see the settings
+    // app's Network page for the same caveat, spelled out at length).
+    readonly property var usageEntry: {
+        const key = root.effectiveIface
+        const perIface = root.usageData.interfaces || {}
+        if (key !== "total" && perIface[key]) return perIface[key]
+        return root.usageData.total_physical || {}
+    }
     // Re-fetch immediately when the period changes rather than waiting for
     // the next 60s tick (`usageProc`/its Timer are declared with the
     // Data usage section below; the id is visible document-wide).
@@ -830,15 +843,17 @@ PanelWindow {
                     StatBox {
                         glyph: "south"
                         label: "Downloaded"
-                        value: root.humanBytes(root.usageData.total_physical ? root.usageData.total_physical.rx : null)
-                        note: "Last " + root.usagePeriodDays + " days · wired + wireless"
+                        value: root.humanBytes(root.usageEntry.rx)
+                        note: "Last " + root.usagePeriodDays + " days · "
+                              + (root.effectiveIface === "total" ? "wired + wireless" : root.effectiveIface)
                     }
 
                     StatBox {
                         glyph: "north"
                         label: "Uploaded"
-                        value: root.humanBytes(root.usageData.total_physical ? root.usageData.total_physical.tx : null)
-                        note: "Last " + root.usagePeriodDays + " days · wired + wireless"
+                        value: root.humanBytes(root.usageEntry.tx)
+                        note: "Last " + root.usagePeriodDays + " days · "
+                              + (root.effectiveIface === "total" ? "wired + wireless" : root.effectiveIface)
                     }
                 }
 
