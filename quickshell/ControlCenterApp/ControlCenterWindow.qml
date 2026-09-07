@@ -84,6 +84,7 @@ PanelWindow {
             refresh()
             reloadBrightness()
             reloadWeather()
+            reloadIme()
             BarReveal.acquire("control-center")
         } else {
             BarReveal.release("control-center")
@@ -214,6 +215,101 @@ PanelWindow {
 
     function refreshWeather() {
         if (!weatherRefreshProc.running) weatherRefreshProc.running = true
+    }
+
+    // --- INPUT METHOD ---
+    // The Control Center half of "build both, I'll compare" (Shehan, B8's
+    // follow-up) — hyprbar/BarApp/ImeModule.qml is the other half, and this
+    // reads the exact same org.fcitx.Fcitx.Controller1 D-Bus interface (see
+    // that file's header for why it's `busctl`, not a Quickshell DBus binding:
+    // there isn't one). Read on open only, like brightness/weather above —
+    // this panel is opened to act on it, not left up watching it change.
+    property bool imeAvailable: false
+    property string imeCurrentId: ""
+    // [{id, label}, ...], in configured order.
+    property var imeConfigured: []
+
+    readonly property string imeDefaultId: "keyboard-us"
+    // Same six IDs and labels as ImeModule.qml's knownLabels — kept in sync by
+    // hand; there is no third language between a QML object here and one
+    // there to share it from.
+    readonly property var imeKnownLabels: ({
+        "keyboard-us": "English (US)",
+        "sayura": "Sinhala — Sayura",
+        "m17n_si_transliteration": "Sinhala — Transliteration",
+        "m17n_ta_phonetic": "Tamil — Phonetic",
+        "m17n_ta_itrans": "Tamil — ITRANS",
+        "m17n_ar_translit": "Arabic — Transliteration"
+    })
+
+    function imeLabelFor(id) {
+        if (root.imeKnownLabels[id] !== undefined) return root.imeKnownLabels[id]
+        const spaced = String(id).replace(/_/g, " ").replace(/-/g, " ").trim()
+        return spaced.replace(/\b\w/g, c => c.toUpperCase())
+    }
+
+    Process {
+        id: imeCurrentProc
+        command: ["busctl", "--user", "--json=short", "call",
+                  "org.fcitx.Fcitx5", "/controller",
+                  "org.fcitx.Fcitx.Controller1", "CurrentInputMethod"]
+        stdout: StdioCollector {
+            onStreamFinished: {
+                let data = null
+                try { data = JSON.parse(this.text || "") } catch (e) { data = null }
+                if (!data || data.type !== "s") {
+                    root.imeAvailable = false
+                    root.imeCurrentId = ""
+                    return
+                }
+                root.imeAvailable = true
+                root.imeCurrentId = data.data[0] || ""
+            }
+        }
+        stderr: StdioCollector {
+            onStreamFinished: { if (this.text !== "") root.imeAvailable = false }
+        }
+    }
+
+    Process {
+        id: imeGroupProc
+        command: ["busctl", "--user", "--json=short", "call",
+                  "org.fcitx.Fcitx5", "/controller",
+                  "org.fcitx.Fcitx.Controller1", "InputMethodGroupInfo", "s", "Default"]
+        stdout: StdioCollector {
+            onStreamFinished: {
+                let data = null
+                try { data = JSON.parse(this.text || "") } catch (e) { data = null }
+                if (!data || !data.data || !data.data[1]) {
+                    root.imeConfigured = []
+                    return
+                }
+                const pairs = data.data[1]
+                const out = []
+                for (let i = 0; i < pairs.length; i++)
+                    out.push({ id: pairs[i][0], label: root.imeLabelFor(pairs[i][0]) })
+                root.imeConfigured = out
+            }
+        }
+    }
+
+    function reloadIme() {
+        if (!imeCurrentProc.running) imeCurrentProc.running = true
+        if (!imeGroupProc.running) imeGroupProc.running = true
+    }
+
+    Process {
+        id: imeSwitchProc
+        // Poll immediately rather than wait for the next open — the row's own
+        // checkmark should already be right by the time this returns.
+        onExited: root.reloadIme()
+    }
+
+    function imeSelect(id) {
+        imeSwitchProc.command = ["busctl", "--user", "call",
+                                  "org.fcitx.Fcitx5", "/controller",
+                                  "org.fcitx.Fcitx.Controller1", "SetCurrentIM", "s", id]
+        imeSwitchProc.running = true
     }
 
     Process { id: brightnessSet }
@@ -1156,6 +1252,87 @@ PanelWindow {
                             font.family: PanelStyle.fontFamily
                             font.pixelSize: 11
                             color: Theme.outline
+                        }
+                    }
+
+                    // ---------- INPUT METHOD ----------
+                    // B8's Control Center half — see the reload/select
+                    // plumbing above for where the data comes from.
+                    Section {
+                        title: "Input method"
+                        glyph: "translate"
+
+                        Text {
+                            Layout.fillWidth: true
+                            visible: !root.imeAvailable
+                            text: "fcitx5 is not running"
+                            font.family: PanelStyle.fontFamily
+                            font.pixelSize: 11
+                            color: Theme.outline
+                        }
+
+                        Text {
+                            Layout.fillWidth: true
+                            visible: root.imeAvailable && root.imeConfigured.length === 0
+                            text: "Nothing configured — see Settings › Input."
+                            font.family: PanelStyle.fontFamily
+                            font.pixelSize: 11
+                            color: Theme.outline
+                        }
+
+                        ColumnLayout {
+                            Layout.fillWidth: true
+                            visible: root.imeAvailable && root.imeConfigured.length > 0
+                            spacing: Tokens.space.hairline
+
+                            Repeater {
+                                model: root.imeConfigured
+
+                                Rectangle {
+                                    id: imeRow
+                                    required property var modelData
+                                    readonly property bool active:
+                                        imeRow.modelData.id === root.imeCurrentId
+
+                                    Layout.fillWidth: true
+                                    implicitHeight: 34
+                                    radius: PanelStyle.buttonRadius
+                                    color: imeRowMouse.containsMouse
+                                           ? PanelStyle.fillHover : "transparent"
+
+                                    RowLayout {
+                                        anchors.fill: parent
+                                        anchors.leftMargin: Tokens.space.sm
+                                        anchors.rightMargin: Tokens.space.sm
+                                        spacing: Tokens.space.md
+
+                                        Text {
+                                            Layout.fillWidth: true
+                                            text: imeRow.modelData.label
+                                            elide: Text.ElideRight
+                                            font.family: PanelStyle.fontFamily
+                                            font.bold: imeRow.active
+                                            font.pixelSize: 12
+                                            color: imeRow.active ? Theme.primary : Theme.on_surface
+                                        }
+
+                                        Glyph {
+                                            visible: imeRow.active
+                                            text: "check"
+                                            font.pixelSize: 14
+                                            color: Theme.primary
+                                        }
+                                    }
+
+                                    MouseArea {
+                                        id: imeRowMouse
+                                        anchors.fill: parent
+                                        hoverEnabled: true
+                                        cursorShape: Qt.PointingHandCursor
+                                        onClicked: root.imeSelect(imeRow.modelData.id)
+                                    }
+                                }
+                            }
                         }
                     }
 
