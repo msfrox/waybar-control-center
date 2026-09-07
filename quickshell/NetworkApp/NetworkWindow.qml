@@ -1222,7 +1222,8 @@ PanelWindow {
                 SectionLabel { Layout.fillWidth: true; text: "Tailscale" }
 
                 Text {
-                    readonly property bool up: root.details.tailscale
+                    readonly property bool up: root.details.tailscale !== undefined
+                                               && root.details.tailscale !== null
                                                && root.details.tailscale.state === "Running"
                     text: up ? "Disconnect" : "Connect"
                     font.family: Theme.fontFamily

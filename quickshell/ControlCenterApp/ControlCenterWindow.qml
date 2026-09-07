@@ -271,11 +271,37 @@ PanelWindow {
         }
     }
 
+    // Which group to ask about. NOT hardcoded to "Default", which is only what
+    // fcitx5 happens to name the group it creates for you -- rename it or add a
+    // second one and the list came back empty. There is no shorthand for "the
+    // current one" either: `InputMethodGroupInfo ""` returns an empty list
+    // rather than defaulting, verified live 2026-09-07. Same two-hop shape
+    // hyprbar's ImeModule.qml uses.
     Process {
-        id: imeGroupProc
+        id: imeGroupNameProc
         command: ["busctl", "--user", "--json=short", "call",
                   "org.fcitx.Fcitx5", "/controller",
-                  "org.fcitx.Fcitx.Controller1", "InputMethodGroupInfo", "s", "Default"]
+                  "org.fcitx.Fcitx.Controller1", "CurrentInputMethodGroup"]
+        stdout: StdioCollector {
+            onStreamFinished: {
+                let data = null
+                try { data = JSON.parse(this.text || "") } catch (e) { data = null }
+                const name = (data && data.type === "s" && data.data) ? (data.data[0] || "") : ""
+                // Leave the last good list alone if fcitx5 is not answering --
+                // a stale-but-correct list beats an empty one, and the section
+                // already surfaces a dead fcitx5 via `imeAvailable`.
+                if (name === "") return
+                imeGroupProc.command = ["busctl", "--user", "--json=short", "call",
+                                        "org.fcitx.Fcitx5", "/controller",
+                                        "org.fcitx.Fcitx.Controller1",
+                                        "InputMethodGroupInfo", "s", name]
+                imeGroupProc.running = true
+            }
+        }
+    }
+
+    Process {
+        id: imeGroupProc
         stdout: StdioCollector {
             onStreamFinished: {
                 let data = null
@@ -293,9 +319,15 @@ PanelWindow {
         }
     }
 
+    // Called on every panel open (and after a switch), so the list reflects
+    // whatever fcitx5 is configured with right now -- add or remove a method in
+    // fcitx5-configtool or hyprsys's Input page and reopening the panel shows
+    // it. Nothing about the list is hardcoded here; only the display labels
+    // are, and an unknown id falls back to a humanised form of itself.
     function reloadIme() {
         if (!imeCurrentProc.running) imeCurrentProc.running = true
-        if (!imeGroupProc.running) imeGroupProc.running = true
+        if (!imeGroupNameProc.running && !imeGroupProc.running)
+            imeGroupNameProc.running = true
     }
 
     Process {
