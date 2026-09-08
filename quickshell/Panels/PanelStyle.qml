@@ -296,5 +296,41 @@ QtObject {
     // above -- this is a column-count LAYOUT decision the sheet's own code
     // divides screen width by, not a design value the Appearance page should
     // expose a slider for.
-    readonly property int sheetColumnWidth: 460
+    //
+    // Raised 460 -> 520 on 2026-09-08 when the sheet got its own larger type
+    // scale (below). The original number was measured against the shared panel
+    // font; with `sheetFontBump` applied, "SUPER+CTRL+SHIFT+Page_Down" and its
+    // label no longer fit in 460 and would elide — the column width and the
+    // type scale are one decision, not two, and moving either alone breaks it.
+    readonly property int sheetColumnWidth: 520
+
+    // --- THE CHEAT SHEET'S OWN TYPE SCALE -------------------------------------
+    //
+    // Shehan, 2026-09-08, looking at the rebuilt sheet: *"make the font larger
+    // on the cheat sheet. cannt read the text ar current size."*
+    //
+    // ⚠️ The sheet gets its OWN scale rather than the fs* tokens above being
+    // raised, because those are shared by every panel on this desktop — the
+    // control centre, audio, bluetooth, network, notifications, and every bar
+    // popout. Bumping them to fix one surface would silently resize all of
+    // them: a system-wide design change wearing the disguise of a legibility
+    // fix.
+    //
+    // The sheet genuinely IS a different reading situation, which is what
+    // justifies a separate scale rather than making it a special case. A panel
+    // is glanced at from working distance while you are doing something else.
+    // The sheet is a full-screen reference you stop and read, often from
+    // further back, and it is the one surface whose entire job is being read
+    // rather than operated.
+    //
+    // Derived from the shared scale rather than hardcoded, so it still follows
+    // tokens.json when the base type size changes. A fixed `16` here would stop
+    // tracking the Appearance page's font setting and reintroduce exactly the
+    // drift PanelStyle exists to stop.
+    readonly property int sheetFontBump: 3
+    readonly property int sheetFsTitle: style.fsTitle + style.sheetFontBump
+    readonly property int sheetFsBody: style.fsBody + style.sheetFontBump
+    readonly property int sheetFsCaption: style.fsCaption + style.sheetFontBump
+    readonly property int sheetFsSmall: style.fsSmall + style.sheetFontBump
+    readonly property int sheetFsMicro: style.fsMicro + style.sheetFontBump
 }
