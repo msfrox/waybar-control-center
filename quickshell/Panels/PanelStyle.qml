@@ -283,4 +283,18 @@ QtObject {
     readonly property int animNormal: Tokens.motion.duration.normal   // settings: tokens.motion.duration.normal — state changes, switches
     readonly property int animSlow: Tokens.motion.duration.slow     // settings: tokens.motion.duration.slow — a value physically moving
     readonly property int animSlower: Tokens.motion.duration.slower  // settings: tokens.motion.duration.slower — a whole panel sliding open/closed
+
+    // --- CHEAT SHEET (SUPER+slash) ---
+    //
+    // The target width of ONE column in the keybind legend's multi-column
+    // layout (brilliant/docs/34-keybind-categories-and-the-cheat-sheet.md
+    // §3.1: "lay the category blocks out in 3-4 columns"). Wide enough that
+    // the longest realistic chord badge ("SUPER+CTRL+SHIFT+Page_Down") plus
+    // its label does not elide, narrow enough that this machine's laptop
+    // output still fits 3 columns and its external output fits 4 rather than
+    // stretching 3 wide ones. NOT wired through tokens.json like the sizes
+    // above -- this is a column-count LAYOUT decision the sheet's own code
+    // divides screen width by, not a design value the Appearance page should
+    // expose a slider for.
+    readonly property int sheetColumnWidth: 460
 }
