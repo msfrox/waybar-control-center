@@ -63,6 +63,14 @@ PanelWindow {
         } else {
             if (adapter) adapter.discovering = false
             BarReveal.release("bluetooth")
+            // Drop the keyboard cursor on close. Without this, reopening the
+            // panel resumes a highlight computed against whatever the device
+            // lists looked like when it was last open - and a scan run in the
+            // meantime, or a device that connected from another client, means
+            // that highlight can land on a row that is no longer where it was
+            // (or gone). Opening should always start "no cursor", same as a
+            // cold open - see KeyNav.qml's own header on why -1 is that state.
+            nav.clear()
         }
     }
 
@@ -83,6 +91,77 @@ PanelWindow {
     Shortcut {
         sequence: "Escape"
         onActivated: if (root.isOpen) root.isOpen = false
+    }
+
+    // --- KEYBOARD ---
+    //
+    // Shape copied from hyprbar's SwitcherWindow.qml (the audit's named
+    // reference for "built right"): a bare Item over the whole window,
+    // focused only while the panel is open, deciding what each key means by
+    // asking `nav` (see the KeyNav instance and section list further down)
+    // where the cursor currently is. No WlrLayershell.keyboardFocus change
+    // here - NetworkWindow.qml:1102-1113 already proves a plain `focus:`
+    // property is enough to reach keys through this panel's existing
+    // HyprlandFocusGrab, and touching the layer's keyboard-focus mode risks
+    // this panel holding the keyboard against the compositor.
+    //
+    // Deliberately no vim h/j/k/l here (unlike SwitcherWindow's grid, which
+    // has no text entry to collide with). NetworkWindow already has a Wi-Fi
+    // PSK TextInput, so a letter key that doubles as "move the cursor" is a
+    // trap waiting for the day one of these panels grows a filter box.
+    Item {
+        id: keyCatcher
+        anchors.fill: parent
+        focus: root.isOpen
+
+        Keys.onPressed: event => {
+            switch (event.key) {
+            case Qt.Key_Down:
+                nav.moveBy(1)
+                event.accepted = true
+                break
+            case Qt.Key_Up:
+                nav.moveBy(-1)
+                event.accepted = true
+                break
+            case Qt.Key_Tab:
+                // Same one-key-does-two-things split SwitcherWindow uses for
+                // Tab/Shift+Tab: the modifier picks the direction, so there is
+                // one case rather than a separate Key_Backtab branch that can
+                // silently stop matching if a future Qt/compositor combo
+                // reports the shifted form differently.
+                if (event.modifiers & Qt.ShiftModifier)
+                    nav.moveBy(-1)
+                else
+                    nav.moveBy(1)
+                event.accepted = true
+                break
+            case Qt.Key_Home:
+                nav.first()
+                event.accepted = true
+                break
+            case Qt.Key_End:
+                nav.last()
+                event.accepted = true
+                break
+            case Qt.Key_Return:
+            case Qt.Key_Enter:
+                root.activateCurrent()
+                event.accepted = true
+                break
+            case Qt.Key_Delete:
+            case Qt.Key_Backspace:
+                // Header controls have nothing to forget, and forgetDevice()
+                // itself re-checks paired/bonded before touching BlueZ - the
+                // same guard the trailing close glyph's `visible:` already
+                // uses - so a discovered-but-unpaired row under the cursor is
+                // a no-op, not an accidental forget.
+                if (nav.currentSection !== "header")
+                    root.forgetDevice(nav.currentItem)
+                event.accepted = true
+                break
+            }
+        }
     }
 
     IpcHandler {
@@ -116,6 +195,97 @@ PanelWindow {
         if (icon.indexOf("printer") >= 0) return "print"
         if (icon.indexOf("camera") >= 0) return "photo_camera"
         return "bluetooth"
+    }
+
+    // --- KEYBOARD NAV ---
+    //
+    // One KeyNav cursor over everything Tab should reach, in the order it is
+    // drawn: the header row's three controls, then the three device lists.
+    // See Panels/KeyNav.qml's header for why this is one flat index rather
+    // than a per-section one - the short version is the same reason
+    // SwitcherWindow.qml gave for windows-and-workspaces: moving the cursor
+    // never needs to know which section it just left, only activating it does.
+    //
+    // The header controls are NOT a Repeater over a live array like the three
+    // lists below - they are three fixed, hand-written pieces of UI (the
+    // adapter Toggle, the Scan text, and the blueman-manager tune button).
+    // KeyNav still wants them as one section so Tab does not skip the header
+    // and land straight on the first device row. Each descriptor names WHICH
+    // control it is ("kind") rather than leaning on its position in the
+    // array, because the "scan" entry can disappear (adapter off or absent)
+    // while the panel is open - a fixed row NUMBER would then silently
+    // retarget onto whichever control happened to slide into that slot.
+    readonly property var headerItems: {
+        const items = [{ kind: "toggle" }]
+        if (root.adapter && root.adapter.enabled)
+            items.push({ kind: "scan" })
+        items.push({ kind: "tune" })
+        return items
+    }
+
+    // Mirrors each section's existing `visible:` binding below rather than
+    // re-deriving it: KeyNav's own contract is that a section with items the
+    // screen isn't showing lets the cursor land somewhere invisible, which
+    // reads from the outside as "keyboard nav is broken" with no clue why.
+    KeyNav {
+        id: nav
+        sections: [
+            { id: "header", items: root.headerItems },
+            { id: "connected", items: (root.adapter && root.adapter.enabled && root.connected.length > 0) ? root.connected : [] },
+            { id: "known", items: (root.adapter && root.adapter.enabled && root.known.length > 0) ? root.known : [] },
+            { id: "discovered", items: (root.adapter && root.adapter.enabled) ? root.discovered : [] }
+        ]
+    }
+
+    // Is the keyboard cursor sitting on this particular header control? Named
+    // by "kind" rather than by row number for the same reason `headerItems`
+    // is built that way above - see that comment.
+    function isHeaderCurrent(kind) {
+        return nav.currentSection === "header" && nav.currentItem !== null && nav.currentItem.kind === kind
+    }
+
+    // THE one connect/disconnect/pair decision for a device, called from the
+    // row's MouseArea and from Enter alike. Used to live inline in
+    // DeviceRow.MouseArea.onClicked; pulled out here because BUGS.md already
+    // priced what a second inline copy of this branch costs this project
+    // ("one correct call site does not protect the second one").
+    function activateDevice(dev) {
+        if (!dev)
+            return
+        if (dev.connected) dev.disconnect()
+        else if (dev.paired || dev.bonded) dev.connect()
+        else dev.pair()
+    }
+
+    // THE one forget path, called from the row's trailing "close" glyph and
+    // from Delete/Backspace alike. Re-checks paired/bonded itself rather than
+    // trusting the caller: the glyph's own `visible:` already encodes "only a
+    // paired/bonded device can be forgotten", but the keyboard path has no
+    // equivalent gate for free, since the cursor can sit on any row.
+    function forgetDevice(dev) {
+        if (!dev)
+            return
+        if (dev.paired || dev.bonded) dev.forget()
+    }
+
+    // What Enter means, resolved against wherever the cursor currently is.
+    // The header branch exists because those three controls are not devices
+    // and each does something different when "activated"; the device branch
+    // is the one function above, same as a click.
+    function activateCurrent() {
+        if (nav.currentSection === "header") {
+            const kind = nav.currentItem ? nav.currentItem.kind : ""
+            if (kind === "toggle") {
+                if (root.adapter) root.adapter.enabled = !root.adapter.enabled
+            } else if (kind === "scan") {
+                if (root.adapter) root.adapter.discovering = !root.adapter.discovering
+            } else if (kind === "tune") {
+                Quickshell.execDetached(["blueman-manager"])
+                root.isOpen = false
+            }
+            return
+        }
+        root.activateDevice(nav.currentItem)
     }
 
     // --- SHARED PIECES ---
@@ -176,12 +346,30 @@ PanelWindow {
     component DeviceRow: Rectangle {
         id: devRoot
         required property var dev
+        // Which KeyNav section this row lives in ("connected"/"known"/
+        // "discovered") and which row within it - set by each Repeater
+        // below, the same way `dev` is. Needed so this one component can ask
+        // `nav.isCurrent(sectionId, row)` regardless of which list it's in.
+        required property string sectionId
+        required property int row
 
         Layout.fillWidth: true
         implicitHeight: 40
         radius: Tokens.radius.sm
-        color: mouse.containsMouse
-               ? PanelStyle.fillHover
+        // ADR-0018 rule 4: pointer and keyboard share one cursor, they do not
+        // take turns. Hovering this row calls nav.setCurrent() below, so by
+        // the time this binding runs, "the mouse is over this row" and "this
+        // row is the keyboard cursor" are the SAME fact rather than two facts
+        // that can disagree. That is why there is only one fill here now,
+        // not `nav.isCurrent(...) || mouse.containsMouse` - the second half
+        // of that OR can never be true without the first half also being
+        // true. fillCursor (Theme.tertiary), not fillHover or fillSelected -
+        // both of those are primary-tinted and already mean something else on
+        // this row (plain mouse-over; "this is the connected/default one"),
+        // so the KeyNav cursor gets its own hue rather than a third alpha of
+        // the same one. See PanelStyle.fillCursor's own comment.
+        color: nav.isCurrent(devRoot.sectionId, devRoot.row)
+               ? PanelStyle.fillCursor
                : "transparent"
 
         RowLayout {
@@ -237,7 +425,7 @@ PanelWindow {
                     anchors.margins: -6
                     hoverEnabled: true
                     cursorShape: Qt.PointingHandCursor
-                    onClicked: devRoot.dev.forget()
+                    onClicked: root.forgetDevice(devRoot.dev)
                 }
             }
         }
@@ -248,11 +436,11 @@ PanelWindow {
             anchors.rightMargin: Tokens.space.gutter   // leave the forget button its own hit area
             hoverEnabled: true
             cursorShape: Qt.PointingHandCursor
-            onClicked: {
-                if (devRoot.dev.connected) devRoot.dev.disconnect()
-                else if (devRoot.dev.paired || devRoot.dev.bonded) devRoot.dev.connect()
-                else devRoot.dev.pair()
-            }
+            // Moving the mouse onto a row moves the SAME cursor the arrow
+            // keys move (ADR-0018 rule 4) - see the `color:` binding above
+            // for why that lets this component use one fill instead of two.
+            onEntered: nav.setCurrent(devRoot.sectionId, devRoot.row)
+            onClicked: root.activateDevice(devRoot.dev)
         }
     }
 
@@ -309,6 +497,16 @@ PanelWindow {
                     checked: root.adapter ? root.adapter.enabled : false
                     enabled: root.adapter !== null
                     onToggled: if (root.adapter) root.adapter.enabled = !root.adapter.enabled
+                    // Keyboard cursor. A fillCursor plate (DeviceRow's
+                    // approach) would fight this control's own fill, which
+                    // already carries meaning - on is Theme.primary, off is
+                    // not - so the cursor here is a ring around that fill
+                    // rather than a second fill on top of it. Theme.tertiary
+                    // to match fillCursor's own reasoning (PanelStyle.qml):
+                    // the cursor gets a hue nothing else on this row already
+                    // uses, rather than reusing primary for a fourth thing.
+                    border.width: root.isHeaderCurrent("toggle") ? Tokens.size.border : 0
+                    border.color: Theme.tertiary
                 }
 
                 Rectangle {
@@ -318,6 +516,15 @@ PanelWindow {
                     color: settingsMouse.containsMouse
                            ? PanelStyle.fillHover
                            : "transparent"
+                    // Same ring approach as the Toggle above, and for the same
+                    // reason: this Rectangle's `color` is already hover's fill,
+                    // so the keyboard cursor gets the border instead of a
+                    // second, competing fill - and the same Theme.tertiary,
+                    // so a cursor looks like the same cursor everywhere in
+                    // this panel rather than one colour on rows and another
+                    // on the header.
+                    border.width: root.isHeaderCurrent("tune") ? Tokens.size.border : 0
+                    border.color: Theme.tertiary
 
                     ToolTip.visible: settingsMouse.containsMouse
                     ToolTip.text: "Open the full blueman manager"
@@ -367,7 +574,10 @@ PanelWindow {
                     model: root.connected
                     DeviceRow {
                         required property var modelData
+                        required property int index
                         dev: modelData
+                        sectionId: "connected"
+                        row: index
                     }
                 }
             }
@@ -387,7 +597,10 @@ PanelWindow {
                     model: root.known
                     DeviceRow {
                         required property var modelData
+                        required property int index
                         dev: modelData
+                        sectionId: "known"
+                        row: index
                     }
                 }
             }
@@ -404,7 +617,17 @@ PanelWindow {
                     text: root.adapter && root.adapter.discovering ? "Scanning…" : "Scan"
                     font.family: Theme.fontFamily
                     font.pixelSize: 11
-                    color: scanMouse.containsMouse ? Theme.primary : Theme.outline
+                    // Text has no border, so the keyboard cursor can't get the
+                    // ring the two boxed header controls get above. Keyboard-
+                    // current uses Theme.tertiary (same cursor colour as
+                    // everywhere else in this panel); hover keeps its own
+                    // existing Theme.primary swap rather than being folded
+                    // into the cursor colour, since a mouse resting here
+                    // without having moved the cursor (see point 4's header
+                    // controls note) is not actually the KeyNav cursor.
+                    color: root.isHeaderCurrent("scan")
+                           ? Theme.tertiary
+                           : (scanMouse.containsMouse ? Theme.primary : Theme.outline)
 
                     ToolTip.visible: scanMouse.containsMouse
                     ToolTip.text: "Start or stop scanning for nearby devices"
@@ -430,7 +653,10 @@ PanelWindow {
                     model: root.discovered
                     DeviceRow {
                         required property var modelData
+                        required property int index
                         dev: modelData
+                        sectionId: "discovered"
+                        row: index
                     }
                 }
             }
