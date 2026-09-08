@@ -77,6 +77,10 @@ PanelWindow {
             BarReveal.acquire("audio")
         } else {
             BarReveal.release("audio")
+            // Reopening should start with no row lit, same as any first open —
+            // not resume a highlight left over a list that has since reordered
+            // itself (audio devices are LIVE; see KeyNav.qml's own header).
+            nav.clear()
         }
     }
 
@@ -205,6 +209,125 @@ PanelWindow {
         return appName || node.description || node.name || "Unknown"
     }
 
+    // --- KEYBOARD ---
+    //
+    // 2026-09-07 reachability audit: this panel was a stack of Repeaters over
+    // live PipeWire arrays with every row a bare MouseArea — no Tab, no
+    // arrows, no Enter. KeyNav.qml (Panels/KeyNav.qml, read its header before
+    // touching this) is the shared fix for that, copied in shape from
+    // hyprbar's SwitcherWindow.qml: one flat cursor over sections declared in
+    // visual order, this file's own Keys.onPressed decides what a key means
+    // for whichever section the cursor is currently in.
+    //
+    // Six sections, not four, because two on-screen row TYPES sit under each
+    // of the "Output"/"Input" headings — a master mute/volume row, then a
+    // list of device-pick rows — and they need different Enter behaviour
+    // (toggle mute vs. make default), which is exactly what KeyNav pushes
+    // onto per-section branching rather than owning itself. Easy Effects
+    // presets are included too: they are DeviceRow-shaped, mouse-only rows
+    // like everything else here, and leaving them out would just move the
+    // audit's defect three rows down instead of closing it.
+    //
+    // Every `items:` list mirrors an existing `visible:` binding on the
+    // ColumnLayout/row below it EXACTLY, rather than restating the condition
+    // in a new form — see KeyNav.qml's header on why a cursor must never be
+    // able to land on a row that is not on screen. `outputDevices`/
+    // `inputDevices`/`appVolumes` need no ternary: their source arrays
+    // (`root.sinks`/`root.sources`/`root.streams`) are already empty in
+    // exactly the cases the matching container hides, so passing them
+    // straight through already agrees with the visible: binding for free.
+    // `outputMaster` has no ternary either — that row carries no `visible:`
+    // condition of its own, so it is always reachable. `inputMaster` and
+    // `easyEffectsPresets` DO need one: each is a single row (not a Repeater)
+    // gated by a `visible:` a plain array pass-through cannot express.
+    readonly property var navSections: [
+        { id: "outputMaster",  items: [root.sink] },
+        { id: "outputDevices", items: root.sinks },
+        { id: "inputMaster",   items: root.sources.length > 0 ? [root.source] : [] },
+        { id: "inputDevices",  items: root.sources },
+        { id: "appVolumes",    items: root.streams },
+        { id: "easyEffectsPresets",
+          items: (!!root.effects.available && !!root.effects.running)
+                 ? (root.effects.output_presets || []) : [] }
+    ]
+
+    KeyNav {
+        id: nav
+        sections: root.navSections
+    }
+
+    // The one step size this file already had an opinion about: the Slider's
+    // own `wheelEnabled`/`stepSize` below. Left/Right on a slider row reuses
+    // it rather than inventing a second number, so a keyboard nudge and a
+    // wheel notch move the handle by the same amount.
+    readonly property real volumeStep: 0.02
+
+    // --- ROW ACTIONS — the ONLY place each of these is implemented. Every
+    // MouseArea/Slider handler below calls one of these, and so does the key
+    // handler, because BUGS.md already paid for the alternative ("one correct
+    // call site does not protect the second one").
+    function setDefaultSink(node) {
+        if (node) Pipewire.preferredDefaultAudioSink = node
+    }
+
+    function setDefaultSource(node) {
+        if (node) Pipewire.preferredDefaultAudioSource = node
+    }
+
+    function toggleMute(node) {
+        if (node && node.audio) node.audio.muted = !node.audio.muted
+    }
+
+    function setVolume(node, value) {
+        if (!node || !node.audio) return
+        node.audio.volume = Math.max(0, Math.min(1, value))
+    }
+
+    function nudgeVolume(node, delta) {
+        if (!node || !node.audio) return
+        root.setVolume(node, node.audio.volume + delta)
+    }
+
+    // Which node, if any, the slider under the cursor should nudge. Only the
+    // three sections that ARE a volume row answer; device-pick rows have no
+    // slider and correctly return null so Left/Right falls through as a
+    // no-op for them.
+    function currentSliderNode() {
+        switch (nav.currentSection) {
+        case "outputMaster": return root.sink
+        case "inputMaster": return root.source
+        case "appVolumes": return nav.currentItem
+        default: return null
+        }
+    }
+
+    // Enter: branches on nav.currentSection exactly the way SwitcherWindow's
+    // commit() branches on entries[selectedIndex].type — moving the cursor
+    // never needed to know which section it was in, only activating it does.
+    function activateCurrent() {
+        const sliderNode = root.currentSliderNode()
+        if (sliderNode) {
+            root.toggleMute(sliderNode)
+            return
+        }
+        switch (nav.currentSection) {
+        case "outputDevices":
+            root.setDefaultSink(nav.currentItem)
+            break
+        case "inputDevices":
+            root.setDefaultSource(nav.currentItem)
+            break
+        case "easyEffectsPresets":
+            if (nav.currentItem) root.effectsCommand(["easyeffects", "-l", nav.currentItem])
+            break
+        }
+    }
+
+    function muteCurrent() {
+        const node = root.currentSliderNode()
+        if (node) root.toggleMute(node)
+    }
+
     // --- REUSABLE PIECES ---
 
     // Material Icons ligature. Deliberately a font glyph rather than an SVG so
@@ -219,107 +342,146 @@ PanelWindow {
 
     // Icon + slider + percentage. The icon is the mute toggle, which is how
     // every desktop mixer behaves and saves a row of chrome.
-    component VolumeRow: RowLayout {
+    //
+    // Root is a Rectangle, not a bare RowLayout, for the same reason
+    // DeviceRow below already is one: the KeyNav cursor highlight needs
+    // somewhere to paint that isn't fighting the RowLayout for a layout slot.
+    // `sectionId`/`row` are blank/0 by default — this component is reused by
+    // three different KeyNav sections (outputMaster, inputMaster,
+    // appVolumes) that each pass their own, so a hover on ANY of them moves
+    // the one shared cursor (ADR-0018 rule 4) rather than each row silently
+    // owning a private hover state the way this used to work.
+    component VolumeRow: Rectangle {
         id: rowRoot
         required property var node
         required property string onIcon
         required property string offIcon
+        property string sectionId: ""
+        property int row: 0
 
-        spacing: Tokens.space.xl
         Layout.fillWidth: true
+        implicitHeight: layout.implicitHeight
+        radius: PanelStyle.buttonRadius
+        color: rowRoot.current ? PanelStyle.fillCursor : "transparent"
 
         readonly property var audio: node ? node.audio : null
         readonly property bool muted: audio ? audio.muted : true
+        readonly property bool current: rowRoot.sectionId !== "" && nav.isCurrent(rowRoot.sectionId, rowRoot.row)
 
-        Rectangle {
-            implicitWidth: 34
-            implicitHeight: 34
-            radius: Tokens.radius.full
-            color: rowRoot.muted ? "transparent" : PanelStyle.fillSelected
+        RowLayout {
+            id: layout
+            anchors.fill: parent
+            spacing: Tokens.space.xl
 
-            Glyph {
-                anchors.centerIn: parent
-                text: rowRoot.muted ? rowRoot.offIcon : rowRoot.onIcon
-                color: rowRoot.muted ? Theme.outline : Theme.primary
-            }
+            Rectangle {
+                implicitWidth: 34
+                implicitHeight: 34
+                radius: Tokens.radius.full
+                color: rowRoot.muted ? "transparent" : PanelStyle.fillSelected
 
-            MouseArea {
-                anchors.fill: parent
-                cursorShape: Qt.PointingHandCursor
-                enabled: rowRoot.audio !== null
-                onClicked: rowRoot.audio.muted = !rowRoot.audio.muted
-            }
-        }
-
-        Slider {
-            id: slider
-            Layout.fillWidth: true
-            from: 0
-            to: 1
-            // Controls' Slider ignores the wheel unless asked. With it on, a
-            // wheel notch moves the handle and emits moved() exactly as a drag
-            // does, so the write-back below covers both without branching.
-            wheelEnabled: true
-            stepSize: 0.02
-            // Binding straight to audio.volume would fight the drag, so take the
-            // value on change and write back only from the handler.
-            value: rowRoot.audio ? rowRoot.audio.volume : 0
-            enabled: rowRoot.audio !== null
-            onMoved: rowRoot.audio.volume = value
-
-            background: Rectangle {
-                x: slider.leftPadding
-                y: slider.topPadding + slider.availableHeight / 2 - height / 2
-                implicitWidth: 180
-                implicitHeight: 6
-                width: slider.availableWidth
-                height: implicitHeight
-                radius: PanelStyle.trackRadius
-                color: PanelStyle.fillTrack
-
-                Rectangle {
-                    width: slider.visualPosition * parent.width
-                    height: parent.height
+                Glyph {
+                    anchors.centerIn: parent
+                    text: rowRoot.muted ? rowRoot.offIcon : rowRoot.onIcon
                     color: rowRoot.muted ? Theme.outline : Theme.primary
-                    radius: PanelStyle.trackRadius
+                }
+
+                MouseArea {
+                    anchors.fill: parent
+                    cursorShape: Qt.PointingHandCursor
+                    enabled: rowRoot.audio !== null
+                    hoverEnabled: true
+                    onEntered: if (rowRoot.sectionId !== "") nav.setCurrent(rowRoot.sectionId, rowRoot.row)
+                    onClicked: root.toggleMute(rowRoot.node)
                 }
             }
 
-            handle: Rectangle {
-                x: slider.leftPadding + slider.visualPosition * (slider.availableWidth - width)
-                y: slider.topPadding + slider.availableHeight / 2 - height / 2
-                implicitWidth: 16
-                implicitHeight: 16
-                radius: Tokens.radius.full
-                color: slider.pressed ? Theme.background : Theme.primary
-                border.color: Theme.primary
-                border.width: 2
-            }
-        }
+            Slider {
+                id: slider
+                Layout.fillWidth: true
+                from: 0
+                to: 1
+                // Controls' Slider ignores the wheel unless asked. With it on, a
+                // wheel notch moves the handle and emits moved() exactly as a drag
+                // does, so the write-back below covers both without branching.
+                // Same number the keyboard's Left/Right uses (root.volumeStep) —
+                // see this file's own `--- KEYBOARD ---` section for why a
+                // slider row is the one place Left/Right means something at all.
+                wheelEnabled: true
+                stepSize: root.volumeStep
+                hoverEnabled: true
+                onHoveredChanged: if (hovered && rowRoot.sectionId !== "") nav.setCurrent(rowRoot.sectionId, rowRoot.row)
+                // Binding straight to audio.volume would fight the drag, so take the
+                // value on change and write back only from the handler.
+                value: rowRoot.audio ? rowRoot.audio.volume : 0
+                enabled: rowRoot.audio !== null
+                onMoved: root.setVolume(rowRoot.node, value)
 
-        Text {
-            text: Math.round((rowRoot.audio ? rowRoot.audio.volume : 0) * 100) + "%"
-            font.family: Theme.fontFamily
-            font.pixelSize: 12
-            color: Theme.on_surface
-            horizontalAlignment: Text.AlignRight
-            Layout.preferredWidth: 38
+                background: Rectangle {
+                    x: slider.leftPadding
+                    y: slider.topPadding + slider.availableHeight / 2 - height / 2
+                    implicitWidth: 180
+                    implicitHeight: 6
+                    width: slider.availableWidth
+                    height: implicitHeight
+                    radius: PanelStyle.trackRadius
+                    color: PanelStyle.fillTrack
+
+                    Rectangle {
+                        width: slider.visualPosition * parent.width
+                        height: parent.height
+                        color: rowRoot.muted ? Theme.outline : Theme.primary
+                        radius: PanelStyle.trackRadius
+                    }
+                }
+
+                handle: Rectangle {
+                    x: slider.leftPadding + slider.visualPosition * (slider.availableWidth - width)
+                    y: slider.topPadding + slider.availableHeight / 2 - height / 2
+                    implicitWidth: 16
+                    implicitHeight: 16
+                    radius: Tokens.radius.full
+                    color: slider.pressed ? Theme.background : Theme.primary
+                    border.color: Theme.primary
+                    border.width: 2
+                }
+            }
+
+            Text {
+                text: Math.round((rowRoot.audio ? rowRoot.audio.volume : 0) * 100) + "%"
+                font.family: Theme.fontFamily
+                font.pixelSize: 12
+                color: Theme.on_surface
+                horizontalAlignment: Text.AlignRight
+                Layout.preferredWidth: 38
+            }
         }
     }
 
     // A selectable device. Radio dot on the left so the current default is
     // readable without colour alone.
+    //
+    // `sectionId`/`row` are blank/-1 by default (the Easy Effects "not
+    // running" fallback state never instantiates this at all, so there is no
+    // third caller to worry about) — set by whichever Repeater places this
+    // in a KeyNav section. `current` wins over plain mouse hover in the
+    // colour below because, per KeyNav's own rule, hovering IS how the mouse
+    // moves this same cursor (see the MouseArea's onEntered) — there is no
+    // second "just hovered, not current" state left to draw once a hover
+    // has already happened.
     component DeviceRow: Rectangle {
         id: devRoot
         required property var node
         required property bool selected
+        property string sectionId: ""
+        property int row: -1
+        readonly property bool current: devRoot.sectionId !== "" && nav.isCurrent(devRoot.sectionId, devRoot.row)
         signal picked
 
         Layout.fillWidth: true
         implicitHeight: 32
         radius: PanelStyle.buttonRadius
-        color: mouse.containsMouse
-               ? PanelStyle.fillHover
+        color: devRoot.current ? PanelStyle.fillCursor
+               : mouse.containsMouse ? PanelStyle.fillHover
                : "transparent"
 
         RowLayout {
@@ -361,6 +523,7 @@ PanelWindow {
             anchors.fill: parent
             hoverEnabled: true
             cursorShape: Qt.PointingHandCursor
+            onEntered: if (devRoot.sectionId !== "") nav.setCurrent(devRoot.sectionId, devRoot.row)
             onClicked: devRoot.picked()
         }
     }
@@ -469,6 +632,7 @@ PanelWindow {
                 node: root.sink
                 onIcon: "volume_up"
                 offIcon: "volume_off"
+                sectionId: "outputMaster"
             }
 
             ColumnLayout {
@@ -479,9 +643,12 @@ PanelWindow {
                     model: root.sinks
                     DeviceRow {
                         required property var modelData
+                        required property int index
                         node: modelData
                         selected: root.sink && modelData.id === root.sink.id
-                        onPicked: Pipewire.preferredDefaultAudioSink = modelData
+                        sectionId: "outputDevices"
+                        row: index
+                        onPicked: root.setDefaultSink(modelData)
                     }
                 }
             }
@@ -501,6 +668,7 @@ PanelWindow {
                 onIcon: "mic"
                 offIcon: "mic_off"
                 visible: root.sources.length > 0
+                sectionId: "inputMaster"
             }
 
             ColumnLayout {
@@ -512,9 +680,12 @@ PanelWindow {
                     model: root.sources
                     DeviceRow {
                         required property var modelData
+                        required property int index
                         node: modelData
                         selected: root.source && modelData.id === root.source.id
-                        onPicked: Pipewire.preferredDefaultAudioSource = modelData
+                        sectionId: "inputDevices"
+                        row: index
+                        onPicked: root.setDefaultSource(modelData)
                     }
                 }
             }
@@ -538,6 +709,7 @@ PanelWindow {
                     model: root.streams
                     ColumnLayout {
                         required property var modelData
+                        required property int index
                         Layout.fillWidth: true
                         spacing: Tokens.space.xxs
 
@@ -554,6 +726,8 @@ PanelWindow {
                             node: modelData
                             onIcon: "volume_up"
                             offIcon: "volume_off"
+                            sectionId: "appVolumes"
+                            row: index
                         }
                     }
                 }
@@ -640,17 +814,104 @@ PanelWindow {
 
                     DeviceRow {
                         required property var modelData
+                        required property int index
                         // DeviceRow labels itself from a PipeWire node; here the
                         // name is already the label, so hand it a stand-in with
                         // the shape the component reads.
                         node: ({ nickname: modelData })
                         selected: modelData === root.effects.output_preset
+                        sectionId: "easyEffectsPresets"
+                        row: index
                         onPicked: root.effectsCommand(["easyeffects", "-l", modelData])
                     }
                 }
             }
 
             Item { Layout.fillHeight: true }
+        }
+    }
+
+    // --- KEYBOARD, continued: the actual key catcher. Declared as a sibling
+    // of the visual card rather than nested inside it — same placement
+    // SwitcherWindow.qml uses for its own `keyCatcher` — because focus is a
+    // property of THIS Item, not of anything it draws, and it needs
+    // `anchors.fill: parent` against the window's contentItem the same way
+    // the card above already does.
+    //
+    // `focus: root.isOpen`, not `WlrLayershell.keyboardFocus`. This panel
+    // already gets its keyboard input through the existing
+    // HyprlandFocusGrab above (see this file's own header on why: changing
+    // keyboard focus mode risks the panel holding the keyboard against the
+    // compositor, and NetworkWindow.qml's password field already proves
+    // plain `focus:` is enough).
+    Item {
+        id: keyCatcher
+        anchors.fill: parent
+        focus: root.isOpen
+
+        Keys.onPressed: event => {
+            switch (event.key) {
+            case Qt.Key_Tab:
+                if (event.modifiers & Qt.ShiftModifier)
+                    nav.moveBy(-1)
+                else
+                    nav.moveBy(1)
+                event.accepted = true
+                break
+            case Qt.Key_Backtab:
+                // Some platforms deliver Shift+Tab as Backtab rather than Tab
+                // + ShiftModifier — handle both rather than assume one.
+                nav.moveBy(-1)
+                event.accepted = true
+                break
+            case Qt.Key_Down:
+                nav.moveBy(1)
+                event.accepted = true
+                break
+            case Qt.Key_Up:
+                nav.moveBy(-1)
+                event.accepted = true
+                break
+            case Qt.Key_Home:
+                nav.first()
+                event.accepted = true
+                break
+            case Qt.Key_End:
+                nav.last()
+                event.accepted = true
+                break
+            case Qt.Key_Left:
+            case Qt.Key_Right: {
+                // THE ONE NON-OBVIOUS KEY IN THIS FILE. Everywhere else in
+                // this desktop's panels, Left/Right either do nothing or
+                // move a selection — but a volume row's real action is a
+                // continuous value, not a commit, so nudging it by one step
+                // is the honest keyboard expression of "the slider under the
+                // cursor", not a stand-in for Enter. It only fires when the
+                // cursor is actually ON a slider row (currentSliderNode()
+                // returns null for a device-pick row); elsewhere the event
+                // is left unaccepted rather than silently eaten, so nothing
+                // downstream loses it for no reason.
+                const node = root.currentSliderNode()
+                if (!node)
+                    break
+                root.nudgeVolume(node, event.key === Qt.Key_Left ? -root.volumeStep : root.volumeStep)
+                event.accepted = true
+                break
+            }
+            case Qt.Key_Return:
+            case Qt.Key_Enter:
+                root.activateCurrent()
+                event.accepted = true
+                break
+            case Qt.Key_M:
+                // No text input exists anywhere in this panel (checked before
+                // adding this — see the report), so a bare M is safe to claim
+                // as a mute toggle without shadowing a search field.
+                root.muteCurrent()
+                event.accepted = true
+                break
+            }
         }
     }
 }

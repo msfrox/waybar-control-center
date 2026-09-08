@@ -170,6 +170,20 @@ QtObject {
     // fill — every chip/tile "on" state across every popup.
     readonly property color fillSelected: style.withAlpha(Theme.primary, Tokens.opacity.fillSelected)  // settings: tokens.opacity.fillSelected
 
+    // THE keyboard/mouse cursor for a KeyNav-driven row list (Panels/KeyNav.qml).
+    // Added for the 2026-09-07 keyboard-reachability fix, shared by every panel
+    // that adopts KeyNav rather than invented per-panel.
+    //
+    // Deliberately Theme.tertiary, not Theme.primary: fillHover AND fillSelected
+    // are both primary-tinted and already mean two other things on a typical
+    // row (plain mouse-over, and "this is the on/default one"). KeyNav's rule is
+    // that pointer and keyboard drive the SAME cursor rather than two competing
+    // highlights (ADR-0018 rule 4; see KeyNav.qml's header) — so the row the
+    // cursor sits on, however it got there, needs a look that cannot be mistaken
+    // for either of those two existing meanings. A different hue does that; a
+    // third alpha of the same hue would not.
+    readonly property color fillCursor: style.withAlpha(Theme.tertiary, Tokens.opacity.fillSelected)  // settings: tokens.opacity.fillSelected
+
     // A hairline rule between blocks. Faint primary rather than grey, which is
     // what keeps a stack of sections from looking like a spreadsheet.
     readonly property color separatorColor: style.withAlpha(Theme.primary, Tokens.opacity.separator)  // settings: tokens.opacity.separator
