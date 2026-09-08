@@ -30,12 +30,45 @@ Rectangle {
     readonly property int effectiveSummarySize: entry.fontSizeOverride > 0 ? entry.fontSizeOverride : 13
     readonly property int effectiveBodySize: entry.fontSizeOverride > 0 ? Math.max(8, entry.fontSizeOverride - 1) : 12
 
+    // --- KEYBOARD CURSOR (panel list only) ------------------------------
+    // Set by NotificationCenterWindow's delegate binding
+    // (`nav.isCurrent("notifications", index)`) — this file has no opinion
+    // on WHERE the cursor is, only how to draw it once told. A toast never
+    // binds this (it has no KeyNav section), so it defaults false there and
+    // toasts are visually unaffected.
+    property bool highlighted: false
+
+    // Fired on the user-driven events this row can produce; the panel wires
+    // each straight to the one root.* function that the keyboard handler
+    // also calls, so dismiss/invoke never have a second implementation to
+    // drift out of sync with the first (BUGS.md: "one correct call site
+    // does not protect the second one").
+    signal hoverEntered()
+    signal dismissRequested()
+    signal actionRequested(int index)
+
     implicitHeight: layout.implicitHeight + 20
     radius: PanelStyle.controlRadius
-    color: showBackground
-        ? Qt.rgba(Theme.surface_container_high.r, Theme.surface_container_high.g,
-                  Theme.surface_container_high.b, 0.45)
-        : "transparent"
+    // Deliberately PanelStyle.fillSelected, not fillHover, for the keyboard
+    // cursor — PanelStyle documents fillSelected as the one fill every popup
+    // already uses for "the selection is on this row", and reusing fillHover
+    // here would make the keyboard cursor look indistinguishable from a
+    // mouse that never left.
+    color: entry.highlighted
+        ? PanelStyle.fillSelected
+        : (showBackground
+            ? Qt.rgba(Theme.surface_container_high.r, Theme.surface_container_high.g,
+                      Theme.surface_container_high.b, 0.45)
+            : "transparent")
+
+    // Passive: only tracks pointer presence, never accepts or steals a
+    // click, so it coexists with the close icon's own MouseArea and the
+    // action buttons below exactly as ADR-0018 rule 4 asks — the mouse
+    // moving over this row and the keyboard moving nav's cursor are two ways
+    // to reach the same one state, never two states arguing over it.
+    HoverHandler {
+        onHoveredChanged: if (hovered) entry.hoverEntered()
+    }
 
     // Critical notifications get a coloured edge rather than a coloured fill —
     // the fill is translucent over the wallpaper and tinting it reads as noise.
@@ -125,7 +158,7 @@ Rectangle {
                         anchors.margins: -4
                         hoverEnabled: true
                         cursorShape: Qt.PointingHandCursor
-                        onClicked: NotificationState.dismiss(entry.notification)
+                        onClicked: entry.dismissRequested()
                     }
                 }
             }
@@ -171,6 +204,13 @@ Rectangle {
 
                     Button {
                         required property var modelData
+                        required property int index
+                        // See NotificationCenterWindow.qml's "KEYBOARD
+                        // NAVIGATION" section: QQC2 Buttons default to
+                        // Qt.StrongFocus on Linux and would otherwise give
+                        // this button native Tab/Enter behaviour that fights
+                        // KeyNav for what those keys mean.
+                        focusPolicy: Qt.NoFocus
                         background: Rectangle {
                             color: "transparent"
                             border.color: Theme.primary
@@ -188,12 +228,12 @@ Rectangle {
                             leftPadding: Tokens.space.lg
                             rightPadding: Tokens.space.lg
                         }
-                        onClicked: {
-                            modelData.invoke()
-                            // A resident notification asks to stay after its
-                            // action runs; anything else is done with.
-                            if (!entry.notification.resident) NotificationState.dropToast(entry.notification)
-                        }
+                        // The resident/dropToast decision lives in ONE place
+                        // now — root.invokeAction() in
+                        // NotificationCenterWindow.qml, which the "1"-"9"
+                        // key handler calls too. This click is just that
+                        // function's other call site.
+                        onClicked: entry.actionRequested(index)
                     }
                 }
             }

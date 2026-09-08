@@ -80,6 +80,10 @@ PanelWindow {
             BarReveal.acquire("notifications")
         } else {
             BarReveal.release("notifications")
+            // Reopening starts clean rather than resuming a highlight on a
+            // notification that may since have been dismissed elsewhere
+            // (e.g. by the sending app) while the panel was closed.
+            nav.clear()
         }
     }
 
@@ -124,9 +128,20 @@ PanelWindow {
     }
 
     // --- REUSABLE COMPONENTS ---
+    //
+    // Both of these are QQC2 Buttons, and both get `focusPolicy: Qt.NoFocus`
+    // — see the "--- KEYBOARD NAVIGATION ---" section below for the finding
+    // that made this necessary (QQC2 Buttons default to Qt.StrongFocus on
+    // Linux, which fights the KeyNav cursor for what Tab/Enter mean). Fixed
+    // at the component level rather than per instance so it also covers the
+    // calendar's chevrons and "Today" pill, which are NOT part of any
+    // KeyNav section but share these components — leaving them focusable
+    // would still let a single click on "Today" steal keyboard focus away
+    // from `keyCatcher` and quietly break every key handled below.
     component ActionIcon: Button {
         property string iconTxt: ""
         property string iconSrc: ""
+        focusPolicy: Qt.NoFocus
         implicitWidth: 28
         implicitHeight: 28
         background: Rectangle { color: "transparent" }
@@ -164,10 +179,25 @@ PanelWindow {
         // Not "highlighted": QtQuick Controls' Button already declares that one
         // FINAL, and shadowing it fails to load the whole config.
         property bool filled: false
+        // Set from `nav.isCurrent("header", ...)` by the two instances below
+        // that are actually part of a KeyNav section (DND, Clear) — the
+        // calendar's "Today" pill never binds this and stays permanently
+        // false, which is correct: it isn't part of any section.
+        property bool navHighlighted: false
+        focusPolicy: Qt.NoFocus
         background: Rectangle {
-            color: pill.filled ? Theme.primary : "transparent"
+            // `filled` (the DND-is-on state) wins the fill when both are
+            // true rather than fighting navHighlighted for it — the border
+            // thickening still shows the cursor is here even then, and a
+            // second, competing fill colour on top of "on" would read as a
+            // third state nobody asked for. Deliberately fillSelected, not
+            // fillHover — PanelStyle names fillSelected as the one every
+            // popup already uses for "the keyboard/selection is on this
+            // row", and reusing fillHover here would make the keyboard
+            // cursor look like a mouse that never left.
+            color: pill.filled ? Theme.primary : (pill.navHighlighted ? PanelStyle.fillSelected : "transparent")
             border.color: Theme.primary
-            border.width: 1
+            border.width: pill.navHighlighted ? 2 : 1
             radius: PanelStyle.controlRadius
         }
         contentItem: Text {
@@ -249,6 +279,197 @@ PanelWindow {
                 dayModel.append({ day: dayNum, isCurrentMonth: true, isToday: isTod })
             } else {
                 dayModel.append({ day: i - startCell - daysInMonth + 1, isCurrentMonth: false, isToday: false })
+            }
+        }
+    }
+
+    // --- KEYBOARD NAVIGATION ---
+    //
+    // See Panels/KeyNav.qml's header for the shared mechanism (all three
+    // panels the 2026-09-07 audit found broken use it) and why it exists.
+    //
+    // THE QQC2-FOCUS FINDING, established before writing any of this rather
+    // than assumed: this panel is the odd one out among the three, because
+    // its header pills and each notification's action buttons are QQC2
+    // Buttons, not bare MouseAreas. Checked against qtdeclarative's own
+    // source (src/quicktemplates/qquickabstractbutton.cpp) rather than
+    // recalled from memory: on Linux, QQuickAbstractButton's `init()` sets
+    // `focusPolicy: Qt.StrongFocus` (only macOS gets the milder TabFocus), and
+    // Return/Space on a focused Button fire clicked() through Qt's own
+    // platform-theme-driven key handling — entirely outside this file. So
+    // clicking OR tabbing to "DND", "Clear", "Today", a calendar chevron, or
+    // a notification's own action button ALREADY moves native Qt keyboard
+    // focus today, with no code of ours involved. Left alone that is a
+    // SECOND cursor: QQC2's own (invisible here — neither Button subclass
+    // below drew a focus ring) disagreeing with KeyNav's highlighted one
+    // about what Enter means, and a stray click anywhere handing focus away
+    // from `keyCatcher` below so Tab/Down/Up would quietly stop doing
+    // anything at all.
+    //
+    // Fix: `focusPolicy: Qt.NoFocus` on the ActionIcon and PillButton
+    // components (above) and on each notification's action Button
+    // (NotificationEntry.qml) — every QQC2 control in this window. One
+    // cursor, KeyNav's, moved only by the key handler below.
+    KeyNav {
+        id: nav
+        // Lightweight descriptor objects for the header, matching what
+        // clicking each pill already does further down; the notification
+        // rows are the live model itself, same object NotificationEntry
+        // binds `notification:` to, so a row's flat position and its actual
+        // data can never disagree. Both are always-visible in this file
+        // (the header title row has no `visible:` binding, and `list` is
+        // already empty exactly when the ListView below hides itself), so
+        // neither section needs the empty-when-hidden filtering the header
+        // comment in KeyNav.qml warns about.
+        sections: [
+            { id: "header", items: [{ id: "dnd" }, { id: "clear" }] },
+            { id: "notifications", items: NotificationState.list }
+        ]
+    }
+
+    // Arrowing/Tabbing past the bottom of the (capped-height, scrollable)
+    // notification list must not leave the highlight somewhere the user
+    // can't see — the list is unbounded, so this is the panel where that
+    // certainly matters. Only "notifications" ever needs it: the header
+    // sits above the list and is always fully on screen.
+    Connections {
+        target: nav
+        function onMoved(index) {
+            if (nav.currentSection === "notifications" && nav.currentRow >= 0)
+                notificationList.positionViewAtIndex(nav.currentRow, ListView.Contain)
+        }
+    }
+
+    // --- ROW ACTIONS ---
+    //
+    // Exactly one implementation of each, called from both the mouse
+    // handlers in NotificationEntry.qml and the key handler below — BUGS.md
+    // records what a second, drifted copy of a "correct" call site cost this
+    // project before ("one correct call site does not protect the second
+    // one").
+    function dismiss(n: var): void {
+        // Dismissing removes the very row the cursor is standing on.
+        // KeyNav's own onCountChanged clamp (its header comment explains
+        // why) already keeps `index` inside bounds when this was the LAST
+        // row — and because the header's two items always occupy flat
+        // indices 0 and 1 ahead of every notification, clamping the last
+        // notification away rolls the cursor back onto "Clear" rather than
+        // off the edge of the world. No empty-list special case is needed
+        // here for that reason.
+        //
+        // What the automatic clamp does NOT do is emit `moved`: it assigns
+        // `nav.index` directly rather than going through setIndex() (see
+        // KeyNav.qml), so nothing tells the list to scroll the new position
+        // into view. Recomputing the same target here, and scrolling
+        // explicitly rather than trusting `moved` alone, is what makes a
+        // last-row dismissal actually visible instead of merely correct:
+        // setIndex() itself would be a silent no-op whenever the automatic
+        // clamp already landed on the same number.
+        const wasIndex = nav.index
+        NotificationState.dismiss(n)
+        if (wasIndex < 0) return
+        nav.setIndex(Math.min(wasIndex, nav.count - 1))
+        if (nav.currentSection === "notifications" && nav.currentRow >= 0)
+            notificationList.positionViewAtIndex(nav.currentRow, ListView.Contain)
+    }
+
+    function invokeDefault(n: var): void {
+        const acts = (n && n.actions) ? n.actions : []
+        const def = acts.find(a => a.identifier === "default")
+        // Most senders never register one — Enter on a row with none is a
+        // deliberate no-op, not a missing feature. (Nothing in this file's
+        // MOUSE handling invokes a default action either: nothing here ever
+        // wired the notification body itself to a click. That is a gap in
+        // the spec this was built from, not something this file invented —
+        // flagged rather than silently "fixed" by adding new mouse behaviour
+        // nobody asked for.)
+        if (!def) return
+        def.invoke()
+        if (!n.resident) NotificationState.dropToast(n)
+    }
+
+    function invokeAction(n: var, index: int): void {
+        const acts = (n && n.actions) ? n.actions : []
+        const act = acts[index]
+        if (!act) return
+        act.invoke()
+        if (!n.resident) NotificationState.dropToast(n)
+    }
+
+    // One Item, one Keys.onPressed, every key this panel understands routed
+    // through the nav/root.* surface above — never a second place that also
+    // knows how to dismiss a notification or toggle DND.
+    Item {
+        id: keyCatcher
+        anchors.fill: parent
+        focus: root.isOpen
+
+        Keys.onPressed: event => {
+            // Shift+Tab is "previous" — checked ahead of the switch below
+            // because a bare `case Qt.Key_Tab` can't see modifiers.
+            if (event.key === Qt.Key_Tab && (event.modifiers & Qt.ShiftModifier)) {
+                nav.moveBy(-1)
+                event.accepted = true
+                return
+            }
+
+            switch (event.key) {
+            case Qt.Key_Down:
+            case Qt.Key_Tab:
+                nav.moveBy(1)
+                event.accepted = true
+                break
+            case Qt.Key_Up:
+                nav.moveBy(-1)
+                event.accepted = true
+                break
+            case Qt.Key_Home:
+                nav.first()
+                event.accepted = true
+                break
+            case Qt.Key_End:
+                nav.last()
+                event.accepted = true
+                break
+            case Qt.Key_Return:
+            case Qt.Key_Enter:
+                // Branches on section exactly the way SwitcherWindow's
+                // commit() branches on entry.type — moving the cursor never
+                // needs to know what kind of thing it is over; only
+                // activating it does.
+                if (nav.currentSection === "header") {
+                    const id = nav.currentItem ? nav.currentItem.id : ""
+                    if (id === "dnd") NotificationState.toggleDnd()
+                    else if (id === "clear" && NotificationState.count > 0) NotificationState.clearAll()
+                } else if (nav.currentSection === "notifications") {
+                    root.invokeDefault(nav.currentItem)
+                }
+                event.accepted = true
+                break
+            case Qt.Key_Delete:
+            case Qt.Key_Backspace:
+                // The single most valuable key in this panel — the one a
+                // human will test first.
+                if (nav.currentSection === "notifications" && nav.currentItem)
+                    root.dismiss(nav.currentItem)
+                event.accepted = true
+                break
+            default:
+                // 1-9 invoke a notification's own action by position. Most
+                // notifications carry none at all (NotificationState.qml's
+                // `snapshotOf()` deliberately saves history entries with
+                // `actions: []`), so this is a no-op far more often than
+                // not — that is correct, not a bug.
+                if (event.key >= Qt.Key_1 && event.key <= Qt.Key_9
+                        && nav.currentSection === "notifications" && nav.currentItem) {
+                    const i = event.key - Qt.Key_1
+                    const acts = nav.currentItem.actions || []
+                    if (i < acts.length) {
+                        root.invokeAction(nav.currentItem, i)
+                        event.accepted = true
+                    }
+                }
+                break
             }
         }
     }
@@ -497,6 +718,7 @@ PanelWindow {
                 PillButton {
                     text: NotificationState.dnd ? "DND on" : "DND"
                     filled: NotificationState.dnd
+                    navHighlighted: nav.isCurrent("header", "dnd")
                     onClicked: NotificationState.toggleDnd()
                 }
 
@@ -504,6 +726,7 @@ PanelWindow {
                     text: "Clear"
                     enabled: NotificationState.count > 0
                     opacity: enabled ? 1.0 : 0.4
+                    navHighlighted: nav.isCurrent("header", "clear")
                     onClicked: NotificationState.clearAll()
                 }
             }
@@ -539,8 +762,13 @@ PanelWindow {
 
                 delegate: NotificationEntry {
                     required property var modelData
+                    required property int index
                     notification: modelData
                     width: notificationList.width - (notificationList.ScrollBar.vertical.visible ? 12 : 0)
+                    highlighted: nav.isCurrent("notifications", index)
+                    onHoverEntered: nav.setCurrent("notifications", index)
+                    onDismissRequested: root.dismiss(modelData)
+                    onActionRequested: (i) => root.invokeAction(modelData, i)
                 }
             }
         }
