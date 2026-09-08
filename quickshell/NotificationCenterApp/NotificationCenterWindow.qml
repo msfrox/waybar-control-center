@@ -190,12 +190,12 @@ PanelWindow {
             // true rather than fighting navHighlighted for it — the border
             // thickening still shows the cursor is here even then, and a
             // second, competing fill colour on top of "on" would read as a
-            // third state nobody asked for. Deliberately fillSelected, not
-            // fillHover — PanelStyle names fillSelected as the one every
-            // popup already uses for "the keyboard/selection is on this
-            // row", and reusing fillHover here would make the keyboard
-            // cursor look like a mouse that never left.
-            color: pill.filled ? Theme.primary : (pill.navHighlighted ? PanelStyle.fillSelected : "transparent")
+            // third state nobody asked for. fillCursor (Theme.tertiary) is
+            // the shared keyboard-cursor token — the same one Audio and
+            // Bluetooth use — and it is deliberately NOT fillSelected here,
+            // because fillSelected is Theme.primary and this pill's `filled`
+            // state already owns that hue for "DND is on".
+            color: pill.filled ? Theme.primary : (pill.navHighlighted ? PanelStyle.fillCursor : "transparent")
             border.color: Theme.primary
             border.width: pill.navHighlighted ? 2 : 1
             radius: PanelStyle.controlRadius

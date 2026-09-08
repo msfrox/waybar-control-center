@@ -49,13 +49,21 @@ Rectangle {
 
     implicitHeight: layout.implicitHeight + 20
     radius: PanelStyle.controlRadius
-    // Deliberately PanelStyle.fillSelected, not fillHover, for the keyboard
-    // cursor — PanelStyle documents fillSelected as the one fill every popup
-    // already uses for "the selection is on this row", and reusing fillHover
-    // here would make the keyboard cursor look indistinguishable from a
-    // mouse that never left.
+    // PanelStyle.fillCursor — the SAME token the Audio and Bluetooth panels
+    // use for this exact state. Not fillHover (a keyboard cursor that looks
+    // like a mouse that never left is not a cursor), and not fillSelected
+    // either: fillSelected is Theme.primary, which on these rows already
+    // means "on"/"default"/"selected", so the cursor would be wearing a
+    // colour that carries someone else's meaning. fillCursor is Theme.tertiary
+    // for precisely that reason — see its comment in PanelStyle.qml.
+    //
+    // ⚠️ This originally shipped as fillSelected. Three panels got this work
+    // in parallel and fillCursor landed after this file's version was
+    // reasoned out, so the argument above was locally sound and globally
+    // wrong: the same cursor was two colours across three panels that sit
+    // beside each other. Corrected in the same pass that found it.
     color: entry.highlighted
-        ? PanelStyle.fillSelected
+        ? PanelStyle.fillCursor
         : (showBackground
             ? Qt.rgba(Theme.surface_container_high.r, Theme.surface_container_high.g,
                       Theme.surface_container_high.b, 0.45)
